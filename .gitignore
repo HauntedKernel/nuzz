@@ -1,0 +1,14 @@
+# Local tooling & state (not part of the source)
+.claude/
+.wrangler/
+
+# Derived deploy folder — synced from the repo root before each deploy (see HANDOFF.md)
+public/
+
+# Dependencies / build noise (none today, but just in case)
+node_modules/
+*.log
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db

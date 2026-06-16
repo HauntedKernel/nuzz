@@ -1,0 +1,1295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#EF9F27">
+<meta name="description" content="A tiny daily petting game. Just a little bit of petting.">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Nuzz">
+<title>Nuzz — your daily cuteness top-off</title>
+<style>
+  :root{
+    --sky:#8fd8f0; --grass:#9ed468; --sand:#f6d68a; --sun:#ffd95e;
+    --pup:#f5a95c; --cream:#fff8ec; --rose:#ff8fa3; --ink:#3a4a5a;
+    --good:#7fc89f; --bad:#e07a8a; --paper:#faeeda; --brand:#ef9f27;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
+  html{height:100%}
+  body{min-height:100%;overflow-x:hidden;background:var(--paper);font-family:'Comic Sans MS','Chalkboard SE','Marker Felt',cursive,sans-serif;color:var(--ink)}
+  #wrap{position:relative;width:100%;height:100vh;height:100dvh;max-width:520px;margin:0 auto;display:flex;flex-direction:column;background:var(--sky)}
+  canvas{display:block;width:100%;flex:1;touch-action:none;cursor:pointer}
+  #hud{position:absolute;top:0;left:0;right:0;padding:12px 16px;display:flex;justify-content:space-between;align-items:flex-start;pointer-events:none;z-index:5}
+  .eyebrow{font-size:11px;letter-spacing:.18em;text-transform:uppercase;opacity:.8;font-weight:bold;color:#fff}
+  #daytag{font-size:20px;font-weight:bold;margin-top:2px;color:#fff;text-shadow:0 2px 0 rgba(58,74,90,.35)}
+  #energybox{text-align:right}
+  #energy{font-size:26px;font-weight:bold;color:#fff;text-shadow:0 2px 0 rgba(58,74,90,.35)}
+  #energy .bone{font-size:20px}
+  #timerbar{position:absolute;top:64px;left:50%;transform:translateX(-50%);width:200px;height:14px;border:3px solid #fff;border-radius:9px;overflow:hidden;background:rgba(255,255,255,.35);z-index:5;box-shadow:0 2px 6px rgba(58,74,90,.2);display:none}
+  #timerfill{height:100%;width:100%;background:linear-gradient(90deg,var(--sun),var(--rose));border-radius:5px}
+  #prompt{position:absolute;left:0;right:0;bottom:92px;text-align:center;pointer-events:none;z-index:5;font-size:18px;font-weight:bold;color:#fff;text-shadow:0 2px 0 rgba(58,74,90,.35);transition:opacity .4s;padding:0 18px}
+  #combo{position:absolute;top:92px;left:0;right:0;text-align:center;pointer-events:none;z-index:5;font-size:16px;font-weight:bold;letter-spacing:.1em;opacity:0;transition:opacity .3s;color:#fff;text-shadow:0 2px 0 rgba(255,143,163,.8)}
+  #action{position:absolute;left:50%;bottom:22px;transform:translateX(-50%);z-index:6;
+    font-family:inherit;font-size:19px;font-weight:bold;color:#fff;
+    background:var(--rose);border:none;border-radius:32px;padding:14px 38px;
+    box-shadow:0 5px 0 #d96a80, 0 10px 20px rgba(58,74,90,.25);cursor:pointer;
+    opacity:0;pointer-events:none;transition:opacity .4s, transform .1s}
+  #action:active{transform:translateX(-50%) translateY(4px);box-shadow:0 1px 0 #d96a80}
+  #action.show{opacity:1;pointer-events:auto;animation:bounce 1.4s ease infinite}
+  @keyframes bounce{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(-6px)}}
+  #endcard{position:absolute;inset:0;z-index:10;display:none;flex-direction:column;justify-content:center;align-items:center;
+    background:rgba(143,216,240,.94);text-align:center;padding:30px;overflow-y:auto}
+  #endcard h2{font-size:28px;color:#fff;text-shadow:0 3px 0 rgba(58,74,90,.3);margin-bottom:8px}
+  #endcard p{max-width:340px;line-height:1.5;font-size:15px;margin-bottom:8px;font-weight:bold;color:var(--ink)}
+  #endcard .eyebrow{margin-bottom:10px}
+  .bagshelf{font-size:14px;background:rgba(255,255,255,.65);border-radius:12px;padding:10px 16px;margin:6px 0;max-width:340px;line-height:1.5}
+  .bagshelf .head{font-size:11px;letter-spacing:.14em;text-transform:uppercase;opacity:.75;display:block;margin-bottom:2px}
+  #stamp{margin:14px 0 6px;background:var(--sun);border:3px dashed #fff;border-radius:14px;padding:10px 22px;font-size:13px;letter-spacing:.15em;font-weight:bold;color:var(--ink);transform:rotate(-3deg);box-shadow:0 4px 10px rgba(58,74,90,.2)}
+  #replay{margin-top:16px;background:#fff;border:none;color:var(--rose);border-radius:26px;padding:12px 28px;font-family:inherit;font-weight:bold;font-size:16px;cursor:pointer;box-shadow:0 4px 0 rgba(58,74,90,.15)}
+  /* ---- landing strip (quiet, below the game) ---- */
+  #strip{max-width:520px;margin:0 auto;padding:24px 20px 40px;text-align:center;background:var(--paper);color:var(--ink)}
+  #strip .word{font-size:30px;font-weight:bold;letter-spacing:.01em;color:var(--brand)}
+  #strip .tag{font-size:15px;margin-top:2px;opacity:.85}
+  #strip .made{font-size:12px;margin-top:12px;opacity:.6}
+  #strip .links{margin-top:14px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+  #strip .links a{display:inline-block;padding:9px 16px;border-radius:22px;background:#fff;color:var(--brand);text-decoration:none;font-weight:bold;font-size:14px;box-shadow:0 3px 0 rgba(58,74,90,.12)}
+  #strip .links a:focus-visible{outline:3px solid var(--rose);outline-offset:2px}
+  #strip .a2hs{font-size:12px;margin-top:16px;opacity:.6;line-height:1.5}
+  /* ---- first-run pet-name prompt ---- */
+  #namecard{position:fixed;inset:0;z-index:20;display:none;flex-direction:column;justify-content:center;align-items:center;background:rgba(250,238,218,.97);text-align:center;padding:30px}
+  #namecard.show{display:flex}
+  #namecard .word{font-size:34px;font-weight:bold;color:var(--brand)}
+  #namecard p{font-size:15px;margin:6px 0 18px;max-width:300px;line-height:1.45;font-weight:bold}
+  #namecard input{font-family:inherit;font-size:20px;text-align:center;padding:12px 16px;border:3px solid var(--brand);border-radius:16px;width:240px;max-width:80vw;color:var(--ink);background:#fff}
+  #namecard button{margin-top:18px;font-family:inherit;font-size:18px;font-weight:bold;color:#fff;background:var(--rose);border:none;border-radius:26px;padding:12px 32px;cursor:pointer;box-shadow:0 4px 0 #d96a80}
+  #namecard button:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
+  @media (prefers-reduced-motion: reduce){ *{transition:none!important;animation:none!important} }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="cv"></canvas>
+  <div id="hud">
+    <div>
+      <div class="eyebrow">Nuzz</div>
+      <div id="daytag">Day 1</div>
+    </div>
+    <div id="energybox">
+      <div class="eyebrow">Bond energy</div>
+      <div id="energy"><span class="bone">🦴</span> <span id="ecount">0</span></div>
+    </div>
+  </div>
+  <div id="timerbar"><div id="timerfill"></div></div>
+  <div id="combo">GOOD DOG ×1</div>
+  <div id="prompt">Tap to start the cuddle round!</div>
+  <button id="action">Start the course! →</button>
+  <div id="endcard">
+    <div class="eyebrow" style="color:#fff">Course complete!</div>
+    <h2 id="endTitle">Nice run!</h2>
+    <p id="endBlurb">What a run.</p>
+    <div class="bagshelf"><span class="head">Your scorecard</span><span id="bagList">—</span></div>
+    <div id="stamp">★ CHAPTER 1 — DONE ★</div>
+    <p style="font-size:13px;opacity:.65;margin-top:8px">Come back tomorrow for another little nuzzle.</p>
+    <button id="replay">Play again</button>
+  </div>
+</div>
+<div id="strip">
+  <div class="word">nuzz</div>
+  <div class="tag">just a little bit of petting.</div>
+  <div class="made">Made by two humans, building in the open.</div>
+  <div class="links">
+    <a href="https://instagram.com/nuzz.pet" target="_blank" rel="noopener">Instagram</a>
+    <a href="https://tiktok.com/@nuzz.pet" target="_blank" rel="noopener">TikTok</a>
+  </div>
+  <div class="a2hs">⌂ Add to your home screen for a one-tap daily nuzzle.</div>
+</div>
+<div id="namecard">
+  <div class="word">nuzz</div>
+  <p>What should we call your pet?</p>
+  <input id="nameInput" type="text" maxlength="16" autocomplete="off" autocapitalize="words" placeholder="Biscuit" aria-label="Your pet's name">
+  <button id="nameGo">Let's nuzzle →</button>
+</div>
+<script>
+(() => {
+const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+let W=0,H=0,DPR=Math.min(window.devicePixelRatio||1,2);
+function resize(){const r=cv.getBoundingClientRect();W=r.width;H=r.height;cv.width=W*DPR;cv.height=H*DPR;ctx.setTransform(DPR,0,0,DPR,0,0);}
+window.addEventListener('resize',resize);
+
+/* ---------- state ---------- */
+/* phases: intro -> bond -> walk -> done.  walk has its own sub-stages (walkStage). */
+let phase='intro';
+let energy=0;
+let combo=0, comboTimer=0;
+let shake=0, t=0;
+let petTimer=0;
+const particles=[], floaters=[];
+let dogSquash=1,dogWag=0,dogEarFlick=0,dogHappy=0;
+const petThrottle={};
+const touches={};
+let lastBaseGain=0;   // GLOBAL throttle for base-scratch energy (finger count must NOT multiply income)
+let spotLock=0;       // brief lockout after a sweet-spot bonus so it can't double-fire
+
+/* ---------- cuddle phase tuning ---------- */
+const ROUND=10*60;            // 10s cuddle at 60fps  (a hard window — no farming past the buzzer)
+const COMBO_DIV=10;           // (legacy) combo flavour; base scratch is now flat, see petAt()
+const BASE_MS=75;             // GLOBAL ms between base-scratch points (~13/s, regardless of fingers)
+/* Sweet-spot bonuses are the REAL income — catching the fast-moving glowing spots is
+   how you bank enough stamina for the course. Base scratching is a small fixed floor
+   (BASE_MS-gated globally, so 4 fingers earn no faster than 1). See COST_* economy note. */
+const SPOT_BONUS_1=14;        // 1 spot covered
+const SPOT_BONUS_2=32;        // 2 spots at once
+const SPOT_BONUS_3=55;        // 3 spots at once
+
+/* ---------- sweet spot anchors (cuddle phase) ---------- */
+const ANCHORS={
+  ear:   {dx: 30, dy:-52, label:'ear'},
+  belly: {dx: -4, dy: 16, label:'belly'},
+  tail:  {dx:-58, dy:-20, label:'tail'},
+  chin:  {dx: 48, dy:-18, label:'chin'},
+  back:  {dx:-26, dy:-22, label:'back'},
+};
+let activeSpots=[];
+let spotTTL=0;
+function rollSpots(){
+  const keys=Object.keys(ANCHORS);
+  const r=Math.random();
+  const n=r<0.5?1:(r<0.85?2:3);
+  const picked=[];
+  while(picked.length<n){
+    const k=keys[Math.floor(Math.random()*keys.length)];
+    if(!picked.includes(k)) picked.push(k);
+  }
+  activeSpots=picked.map(k=>({key:k}));
+  spotTTL=110+Math.random()*70;   // spots move ~every 1.8–3s — catch them quick!
+}
+
+/* ---------- walk: investigation tuning ---------- */
+const SCENES_PER_WALK=2;      // how many investigation stops along the walk
+const EASY_COST=3;            // 🦴 to investigate easy spot
+const MED_COST =7;            // 🦴 medium
+const HARD_COST=12;           // 🦴 hard
+/* Item pools per difficulty tier. Easy = mostly junk + small finds; medium =
+   the everyday range; hard = big swings (the best AND the worst stuff).
+   Edit freely. */
+const TIER_EASY=[
+  {emoji:'🌰', name:'a clean acorn',           tone:'neutral'},
+  {emoji:'🪨', name:'a smooth pebble',         tone:'neutral'},
+  {emoji:'🍂', name:'a chewed-up leaf',        tone:'junk'},
+  {emoji:'🪵', name:'a plain little stick',    tone:'junk'},
+  {emoji:'🐌', name:'a slow snail (unharmed)', tone:'neutral'},
+];
+const TIER_MED=[
+  {emoji:'🪙', name:'a shiny old coin',        tone:'good'},
+  {emoji:'🗝️', name:'a small brass key',       tone:'good'},
+  {emoji:'🪶', name:'a peculiar feather',      tone:'good', clue:true},
+  {emoji:'🔧', name:'a sturdy multitool',      tone:'good'},
+  {emoji:'🍕', name:'an ancient pizza slice',  tone:'bad'},
+  {emoji:'🧦', name:"a stranger's used sock",  tone:'bad'},
+  {emoji:'🥃', name:'broken glass',            tone:'bad'},
+];
+const TIER_HARD=[
+  {emoji:'💵', name:'a folded $20 bill',       tone:'great'},
+  {emoji:'📜', name:'a torn map fragment',     tone:'great', clue:true},
+  {emoji:'💎', name:'lost jewelry',            tone:'great'},
+  {emoji:'💉', name:'a used syringe',          tone:'awful'},
+  {emoji:'🩹', name:'a used bandage',          tone:'awful'},
+  {emoji:'🎈', name:'something rubbery (do NOT ask)', tone:'awful'},
+  {emoji:'🐀', name:'a very dead rat',         tone:'awful'},
+];
+function pickFrom(pool){return pool[Math.floor(Math.random()*pool.length)];}
+
+/* ---------- walk: runtime state ---------- */
+let walkStage='walking';      // walking|arrive|scene|digging|reveal|departing|done_walk
+let walkStageT=0;
+let sceneIdx=0;
+let sceneSpots=[];            // array of {x,y,scale,tier,cost,dug,item,emoji,label}
+let activeSpot=-1;            // index of spot currently being dug, or -1
+let dogTrailX=0, dogTrailY=0; // dog position during walk (for moving to spots)
+let dogTrailScale=1;
+const bag=[];                 // items collected this walk
+let trailScroll=0;
+const trees=[];               // parallax trees {side, depth, kind}
+function spawnTree(side){
+  trees.push({side: side||(Math.random()<0.5?-1:1),
+              depth: 0.02 + Math.random()*0.04,
+              kind: Math.random()<0.5?'pine':'leafy'});
+}
+for(let i=0;i<8;i++) spawnTree();
+function stepTrees(speed){
+  for(let i=trees.length-1;i>=0;i--){
+    trees[i].depth += 0.0055*speed;
+    if(trees[i].depth>1) trees.splice(i,1);
+  }
+  if(Math.random()<0.035*speed) spawnTree();
+}
+
+/* ---------- course: agility tuning (Chapter 1) ----------
+   The second half of the day. Biscuit auto-runs left→right; you only TIME her
+   leaps. Energy earned cuddling is now her STAMINA bar (the 🦴 counter) and drains
+   as she runs — a clean leap costs little, a bonk costs a lot. No fail state: a
+   miss only breaks your CLEAN combo chain. See HANDOFF.md → "CHAPTER 1". */
+const COURSE_HURDLES   = 14;     // hurdles in one run before the finish line
+const COURSE_SPEED0    = 4.2;    // starting pace (px/frame the world scrolls left)
+const SPEED_RAMP       = 0.9;    // added to the pace every time a hurdle passes
+const COURSE_SPEED_MAX = 11;     // ceiling so the ramp stays humanly possible
+const GAP_RAMP         = 5;      // frames shaved off the spawn gap per hurdle (comes quicker)
+const HURDLE_TINTS     = ['#ff8fa3','#ffd95e','#7fc89f','#8fb8f0']; // so they're not same-y
+const HURDLE_GAP       = 100;    // frames between hurdle spawns (the rhythm)
+const JUMP_V           = 9.5;    // initial pop when she leaves the ground (a tap = this)
+const JUMP_GRAV        = 0.85;   // normal gravity (falling, and after you release)
+const JUMP_GRAV_HOLD   = 0.32;   // gentler gravity WHILE you hold & she's rising = floats higher
+const HOLD_MAX_FR      = 20;     // max frames the hold-lift applies (caps the biggest leap)
+const PERFECT_MARGIN   = 22;     // extra clearance above the bar that counts as PERFECT
+/* Bars get taller as the run ramps, so later hurdles demand a longer hold. */
+const BAR_BASE         = 40;     // height of the first hurdle
+const BAR_RAMP         = 8;      // taller per hurdle
+const BAR_MAX          = 100;    // tallest bar — plateaus here so the long tail stays PERFECT-able
+/* Stamina cost per outcome (spent from the 🦴 bar). DESIGN: petting is the FUN, explosive
+   charge-up — it hands you a big bank (many hundreds). The JUMPS are the real skill gate:
+   hurdles are expensive and a BONK is brutal, so sloppy jumping drains even a fat bank and
+   FAILS the run. A clean run ≈ 14 × COST_GOOD = ~448 (much less with cheap PERFECTs); each
+   bonk swaps a 32 for a 55, so a handful of misses blows past most banks. Zero = FAIL. */
+const COST_PERFECT = 26;
+const COST_GOOD    = 60;
+const COST_MISS    = 100;
+const COURSE_DOG_SCALE = 1.35;
+function courseGroundY(){ return H*0.80; }   // y of the track surface (feet rest here)
+
+/* ---------- course: runtime state ---------- */
+let courseStage='intro';   // intro|running|finish
+let courseT=0;
+let courseScroll=0;
+let hurdles=[];            // {x, judged, result, knocked}
+let spawnedCount=0, clearedCount=0, perfectCount=0, bestCombo=0;
+let hurdlesPassed=0;       // counts judged hurdles — drives the speed ramp
+let courseSpeed=COURSE_SPEED0;
+let nextSpawn=0;
+let jumpY=0, jumpVel=0, jumpElapsed=0, grounded=true;
+let holding=false, holdFrames=0;   // hold-to-jump-higher control
+let returningToCourse=false;  // true while topping up stamina mid-course
+
+/* ---------- audio ---------- */
+let AC=null;
+function audio(){if(!AC){try{AC=new (window.AudioContext||window.webkitAudioContext)()}catch(e){}}return AC;}
+function blip(f=440,d=0.08,ty='sine',g=0.15){
+  const ac=audio();if(!ac)return;
+  const o=ac.createOscillator(),gn=ac.createGain();
+  o.type=ty;o.frequency.value=f;
+  gn.gain.setValueAtTime(g,ac.currentTime);
+  gn.gain.exponentialRampToValueAtTime(0.001,ac.currentTime+d);
+  o.connect(gn).connect(ac.destination);o.start();o.stop(ac.currentTime+d);
+}
+function purr(){blip(220+Math.min(combo,30)*16,0.09,'triangle',0.10);}
+function jackpot(){[523,659,784,1047,1319].forEach((f,i)=>setTimeout(()=>blip(f,0.16,'sine',0.16),i*60));}
+function sadTrombone(){[300,260,220].forEach((f,i)=>setTimeout(()=>blip(f,0.2,'sawtooth',0.07),i*140));}
+function digSound(){blip(140+Math.random()*60,0.06,'square',0.07);}
+
+/* ---------- particles ---------- */
+function burst(x,y,n,kind){
+  for(let i=0;i<n;i++){
+    const a=Math.random()*Math.PI*2,s=1.5+Math.random()*3;
+    particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s-2.2,life:1,kind,
+      r:kind==='heart'?8+Math.random()*7:4+Math.random()*4,spin:Math.random()*6});
+  }
+}
+function floater(x,y,text,color){floaters.push({x,y,text,color,life:1});}
+
+/* ---------- dog (side view — cuddle phase) ---------- */
+let dogPos={x:0,y:0,scale:1};
+function drawDog(cx,cy,scale){
+  ctx.save();ctx.translate(cx,cy);ctx.scale(scale,scale*dogSquash);
+  ctx.lineWidth=4;ctx.strokeStyle='#3a4a5a';ctx.lineJoin='round';
+  ctx.save();ctx.translate(-50,-14);ctx.rotate(Math.sin(dogWag)*(0.5+dogHappy*0.5)-0.6);
+  ctx.fillStyle='#e08c3e';ctx.beginPath();ctx.ellipse(0,-16,9,20,0.25,0,7);ctx.fill();ctx.stroke();ctx.restore();
+  ctx.fillStyle='#f5a95c';ctx.beginPath();ctx.ellipse(-12,2,42,30,0,0,7);ctx.fill();ctx.stroke();
+  ctx.fillStyle='#fff8ec';ctx.beginPath();ctx.ellipse(0,12,20,16,0,0,7);ctx.fill();
+  ctx.fillStyle='#e08c3e';
+  [[-36,0],[-14,0],[6,0],[26,0]].forEach(([lx,s])=>{
+    ctx.beginPath();ctx.roundRect(lx+s*0.5,18,13,20,6);ctx.fill();ctx.stroke();});
+  ctx.save();ctx.translate(34,-26);ctx.rotate(Math.sin(t*0.12)*0.06*(1+dogHappy));
+  ctx.fillStyle='#e08c3e';
+  ctx.save();ctx.translate(-16,-18);ctx.rotate(-0.5+dogEarFlick*0.5);
+  ctx.beginPath();ctx.ellipse(0,-6,11,17,0,0,7);ctx.fill();ctx.stroke();ctx.restore();
+  ctx.save();ctx.translate(10,-22);ctx.rotate(0.35-dogEarFlick*0.3);
+  ctx.beginPath();ctx.ellipse(0,-6,11,17,0,0,7);ctx.fill();ctx.stroke();ctx.restore();
+  ctx.fillStyle='#f5a95c';ctx.beginPath();ctx.arc(0,0,28,0,7);ctx.fill();ctx.stroke();
+  ctx.fillStyle='#fff8ec';ctx.beginPath();ctx.ellipse(10,8,16,12,0,0,7);ctx.fill();ctx.stroke();
+  ctx.fillStyle='#3a4a5a';ctx.beginPath();ctx.ellipse(18,4,6,5,0,0,7);ctx.fill();
+  ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(16,2,1.8,0,7);ctx.fill();
+  if(dogHappy>0.55){ctx.lineWidth=4;
+    ctx.beginPath();ctx.arc(-6,-6,6,Math.PI*1.05,Math.PI*1.95);ctx.stroke();
+    ctx.beginPath();ctx.arc(8,-8,6,Math.PI*1.05,Math.PI*1.95);ctx.stroke();
+  }else{ctx.fillStyle='#3a4a5a';
+    ctx.beginPath();ctx.arc(-6,-5,6.5,0,7);ctx.fill();
+    ctx.beginPath();ctx.arc(8,-7,6.5,0,7);ctx.fill();
+    ctx.fillStyle='#fff';
+    ctx.beginPath();ctx.arc(-4,-7,2.4,0,7);ctx.fill();
+    ctx.beginPath();ctx.arc(10,-9,2.4,0,7);ctx.fill();}
+  if(dogHappy>0.3){ctx.fillStyle='rgba(255,143,163,'+Math.min(0.7,dogHappy)+')';
+    ctx.beginPath();ctx.ellipse(-16,4,5,3,0,0,7);ctx.fill();}
+  if(dogHappy>0.5){ctx.fillStyle='#ff8fa3';
+    ctx.beginPath();ctx.ellipse(12,18,5,8,0.15,0,7);ctx.fill();ctx.stroke();}
+  ctx.restore();ctx.restore();
+}
+function spotXY(key){
+  const a=ANCHORS[key];
+  return {x:dogPos.x+a.dx*dogPos.scale, y:dogPos.y+a.dy*dogPos.scale};
+}
+function drawSpots(){
+  if(phase!=='bond')return;
+  for(const s of activeSpots){
+    const p=spotXY(s.key);
+    const pulse=8+4*Math.sin(t*0.15);
+    const grad=ctx.createRadialGradient(p.x,p.y,4,p.x,p.y,30+pulse);
+    grad.addColorStop(0,'rgba(255,217,94,.85)');
+    grad.addColorStop(1,'rgba(255,217,94,0)');
+    ctx.fillStyle=grad;
+    ctx.beginPath();ctx.arc(p.x,p.y,30+pulse,0,7);ctx.fill();
+    ctx.fillStyle='#fff';ctx.font='bold 17px sans-serif';ctx.textAlign='center';
+    ctx.strokeStyle='rgba(58,74,90,.5)';ctx.lineWidth=3;
+    ctx.strokeText('✦',p.x,p.y+6);ctx.fillText('✦',p.x,p.y+6);
+  }
+  if(activeSpots.length>1){
+    ctx.fillStyle='#fff';ctx.font='bold 13px sans-serif';ctx.textAlign='center';
+    const msg=activeSpots.length+' spots at once = MEGA!';
+    ctx.strokeStyle='rgba(58,74,90,.5)';ctx.lineWidth=3;
+    ctx.strokeText(msg,W/2,H*0.36);ctx.fillText(msg,W/2,H*0.36);
+  }
+}
+
+/* ---------- dog from behind (walk phase) ---------- */
+function drawDogBehind(cx,cy,scale,opts){
+  opts=opts||{};
+  const headDown=opts.headDown||0;
+  const digging=opts.digging||0;
+  ctx.save();ctx.translate(cx,cy);ctx.scale(scale,scale);
+  ctx.lineWidth=3.2;ctx.strokeStyle='#3a4a5a';ctx.lineJoin='round';
+  // Body
+  ctx.fillStyle='#f5a95c';
+  ctx.beginPath();ctx.ellipse(0,6,22,18,0,0,7);ctx.fill();ctx.stroke();
+  // Spine highlight
+  ctx.fillStyle='#fff8ec';
+  ctx.beginPath();ctx.ellipse(0,3,5,15,0,0,7);ctx.fill();
+  // Legs (animated)
+  const step=Math.sin(t*0.30)*3;
+  ctx.fillStyle='#e08c3e';
+  ctx.beginPath();ctx.roundRect(-15,18+step,8,12,3);ctx.fill();ctx.stroke();
+  ctx.beginPath();ctx.roundRect(7,18-step,8,12,3);ctx.fill();ctx.stroke();
+  // Tail (up, wagging)
+  ctx.save();ctx.translate(0,-6);ctx.rotate(Math.sin(dogWag*1.2)*0.45);
+  ctx.fillStyle='#e08c3e';
+  ctx.beginPath();ctx.ellipse(0,-11,4.5,11,0,0,7);ctx.fill();ctx.stroke();
+  ctx.restore();
+  // Head (lowers when sniffing/digging)
+  const hd=headDown + digging*0.5;
+  ctx.save();
+  ctx.translate(0,-14 + hd*8);
+  ctx.fillStyle='#f5a95c';
+  ctx.beginPath();ctx.arc(0,0,13,0,7);ctx.fill();ctx.stroke();
+  ctx.fillStyle='#e08c3e';
+  ctx.save();ctx.translate(-8,-8);ctx.rotate(-0.45+dogEarFlick*0.3);
+  ctx.beginPath();ctx.ellipse(0,-4,5,10,0,0,7);ctx.fill();ctx.stroke();ctx.restore();
+  ctx.save();ctx.translate(8,-8);ctx.rotate(0.45-dogEarFlick*0.3);
+  ctx.beginPath();ctx.ellipse(0,-4,5,10,0,0,7);ctx.fill();ctx.stroke();ctx.restore();
+  ctx.fillStyle='#3a4a5a';
+  ctx.beginPath();ctx.arc(0,7,2.6,0,7);ctx.fill();
+  ctx.restore();
+  ctx.restore();
+}
+
+/* ---------- scene: cuddle (meadow) ---------- */
+function drawSky(){
+  const g=ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#8fd8f0');g.addColorStop(0.7,'#c9eef9');
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  ctx.save();ctx.translate(W*0.82,H*0.13);
+  ctx.fillStyle='#ffd95e';
+  for(let i=0;i<8;i++){ctx.save();ctx.rotate(i*Math.PI/4+Math.sin(t*0.02)*0.1);
+    ctx.beginPath();ctx.ellipse(0,-42,6,12,0,0,7);ctx.fill();ctx.restore();}
+  ctx.beginPath();ctx.arc(0,0,28,0,7);ctx.fill();
+  ctx.strokeStyle='#f0b840';ctx.lineWidth=3;ctx.stroke();ctx.restore();
+  ctx.fillStyle='rgba(255,255,255,.9)';
+  [[0.18,0.12],[0.5,0.2],[0.05,0.28]].forEach(([fx,fy],i)=>{
+    const cx2=((fx*W+t*0.15+i*60)%(W+140))-70,cy2=fy*H;
+    ctx.beginPath();ctx.arc(cx2,cy2,18,0,7);ctx.arc(cx2+20,cy2-6,22,0,7);ctx.arc(cx2+44,cy2,16,0,7);ctx.fill();});
+}
+function drawMeadow(scroll){
+  ctx.fillStyle='#b4e088';
+  ctx.beginPath();ctx.moveTo(0,H*0.60);
+  for(let x=0;x<=W;x+=20)ctx.lineTo(x,H*0.60-26*Math.sin((x+scroll*0.3)*0.008));
+  ctx.lineTo(W,H);ctx.lineTo(0,H);ctx.fill();
+  ctx.fillStyle='#9ed468';ctx.fillRect(0,H*0.70,W,H);
+  ctx.fillStyle='#f6d68a';
+  ctx.beginPath();ctx.moveTo(0,H*0.79);
+  for(let x=0;x<=W;x+=16)ctx.lineTo(x,H*0.79+8*Math.sin((x+scroll)*0.01));
+  for(let x=W;x>=0;x-=16)ctx.lineTo(x,H*0.89+8*Math.sin((x+scroll)*0.01));
+  ctx.fill();
+  for(let i=0;i<14;i++){
+    const fx=((i*97-scroll)%W+W)%W,fy=H*0.72+((i*53)%90);
+    ctx.fillStyle=i%2?'#ff8fa3':'#fff';
+    for(let p2=0;p2<5;p2++){const a=p2*Math.PI*0.4+i;
+      ctx.beginPath();ctx.arc(fx+Math.cos(a)*4,fy+Math.sin(a)*4,3,0,7);ctx.fill();}
+    ctx.fillStyle='#ffd95e';ctx.beginPath();ctx.arc(fx,fy,2.5,0,7);ctx.fill();}
+}
+
+/* ---------- scene: first-person trail ---------- */
+function drawTrailScene(){
+  const g=ctx.createLinearGradient(0,0,0,H*0.55);
+  g.addColorStop(0,'#8fd8f0');g.addColorStop(1,'#dff3fa');
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H*0.55);
+  ctx.save();ctx.translate(W*0.78,H*0.16);
+  ctx.fillStyle='#ffd95e';ctx.beginPath();ctx.arc(0,0,22,0,7);ctx.fill();
+  ctx.strokeStyle='#f0b840';ctx.lineWidth=2.5;ctx.stroke();ctx.restore();
+  ctx.fillStyle='#7fb87a';
+  ctx.beginPath();ctx.moveTo(0,H*0.55);
+  for(let x=0;x<=W;x+=14){ctx.lineTo(x,H*0.55 - 18*Math.abs(Math.sin((x*0.013)+0.5)));}
+  ctx.lineTo(W,H*0.55);ctx.fill();
+  ctx.fillStyle='#9ed468';
+  ctx.fillRect(0,H*0.55,W,H*0.45);
+  // Trail
+  const vpX=W*0.5, vpY=H*0.55;
+  const trailHalfNear=W*0.42, trailHalfFar=8;
+  ctx.fillStyle='#f6d68a';
+  ctx.beginPath();
+  ctx.moveTo(vpX-trailHalfFar,vpY);
+  ctx.lineTo(vpX+trailHalfFar,vpY);
+  ctx.lineTo(vpX+trailHalfNear,H);
+  ctx.lineTo(vpX-trailHalfNear,H);
+  ctx.closePath();ctx.fill();
+  ctx.strokeStyle='#c79a5a';ctx.lineWidth=3;
+  ctx.beginPath();
+  ctx.moveTo(vpX-trailHalfFar,vpY);ctx.lineTo(vpX-trailHalfNear,H);
+  ctx.moveTo(vpX+trailHalfFar,vpY);ctx.lineTo(vpX+trailHalfNear,H);
+  ctx.stroke();
+  // motion dashes
+  ctx.fillStyle='rgba(199,154,90,.55)';
+  for(let i=0;i<6;i++){
+    const dr=((i/6) + (trailScroll%1));
+    if(dr<0.04||dr>1) continue;
+    const py=vpY+(H-vpY)*dr;
+    const w=2 + dr*18;
+    const h=1.5 + dr*5;
+    ctx.beginPath();ctx.ellipse(vpX,py,w,h,0,0,7);ctx.fill();
+  }
+  trees.sort((a,b)=>a.depth-b.depth);
+  for(const tr of trees) drawTrailTree(tr);
+  ctx.fillStyle='#7eb058';
+  for(let i=0;i<10;i++){
+    const tx=((i*73 - trailScroll*40)%W+W)%W;
+    const ty=H*0.56+ (i*13)%6;
+    ctx.beginPath();ctx.ellipse(tx,ty,4,1.8,0,0,7);ctx.fill();
+  }
+}
+function drawTrailTree(tr){
+  const vpX=W*0.5, vpY=H*0.55;
+  const d=tr.depth;
+  const sidePush = tr.side * (W*0.55+120) * Math.pow(d, 1.35);
+  const x = vpX + sidePush;
+  const y = vpY + (H - vpY) * d;
+  const scale = 0.18 + d*1.55;
+  ctx.save();ctx.translate(x,y);ctx.scale(scale,scale);
+  ctx.fillStyle='#6b4a2a';
+  ctx.fillRect(-4,-4,8,42);
+  ctx.strokeStyle='#3a4a5a';ctx.lineWidth=2;ctx.strokeRect(-4,-4,8,42);
+  if(tr.kind==='pine'){
+    ctx.fillStyle='#3f7a4a';
+    ctx.beginPath();ctx.moveTo(0,-58);ctx.lineTo(-22,-12);ctx.lineTo(22,-12);ctx.closePath();ctx.fill();ctx.stroke();
+    ctx.beginPath();ctx.moveTo(0,-40);ctx.lineTo(-28,0);ctx.lineTo(28,0);ctx.closePath();ctx.fill();ctx.stroke();
+  } else {
+    ctx.fillStyle='#4a9a5a';
+    ctx.beginPath();ctx.arc(-10,-20,18,0,7);ctx.fill();
+    ctx.beginPath();ctx.arc(10,-25,20,0,7);ctx.fill();
+    ctx.beginPath();ctx.arc(0,-10,22,0,7);ctx.fill();
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/* ---------- investigation spots (drawn during 'scene' stage) ---------- */
+function buildScene(){
+  // Three spots laid out across the foreground.  Tier difficulty = visual size.
+  sceneSpots = [
+    {tier:'easy',  cost:EASY_COST, x:W*0.22, y:H*0.86, scale:1.0,
+     emoji:'🌿', label:'EASY', dug:false, item:null},
+    {tier:'med',   cost:MED_COST,  x:W*0.50, y:H*0.80, scale:0.85,
+     emoji:'🪵', label:'MED',  dug:false, item:null},
+    {tier:'hard',  cost:HARD_COST, x:W*0.78, y:H*0.74, scale:0.72,
+     emoji:'🪨', label:'HARD', dug:false, item:null},
+  ];
+}
+function drawSceneSpots(){
+  if(walkStage!=='scene' && walkStage!=='digging' && walkStage!=='reveal') return;
+  for(let i=0;i<sceneSpots.length;i++){
+    const s=sceneSpots[i];
+    const affordable = !s.dug && energy >= s.cost;
+    const isActive = i===activeSpot;
+    const baseScale = s.scale;
+    const pulse = (!s.dug && affordable && walkStage==='scene')
+      ? (1 + 0.05*Math.sin(t*0.18 + i)) : 1;
+    ctx.save();
+    ctx.translate(s.x, s.y);
+    ctx.scale(baseScale*pulse, baseScale*pulse);
+    if(!s.dug){
+      // dirt patch
+      ctx.fillStyle = affordable ? '#c79a5a' : '#9c8a78';
+      ctx.globalAlpha = affordable ? 1 : 0.55;
+      ctx.beginPath();ctx.ellipse(0,0,40,14,0,0,7);ctx.fill();
+      ctx.strokeStyle='#3a4a5a';ctx.lineWidth=3;ctx.stroke();
+      // marker emoji
+      ctx.font='bold 32px sans-serif';ctx.textAlign='center';
+      ctx.fillStyle = '#fff';
+      ctx.fillText(s.emoji, 0, -8);
+      // cost badge
+      ctx.globalAlpha = 1;
+      const badgeY = -38;
+      ctx.fillStyle = affordable ? '#fff' : 'rgba(255,255,255,.55)';
+      const w=72, h=26;
+      ctx.beginPath();ctx.roundRect(-w/2, badgeY-h/2, w, h, 13);ctx.fill();
+      ctx.strokeStyle = affordable ? '#3a4a5a' : 'rgba(58,74,90,.4)';
+      ctx.lineWidth=2.5;ctx.stroke();
+      ctx.fillStyle = affordable ? '#3a4a5a' : 'rgba(58,74,90,.6)';
+      ctx.font='bold 14px sans-serif';
+      ctx.fillText('🦴 '+s.cost, 0, badgeY+5);
+      // small difficulty label
+      ctx.font='bold 10px sans-serif';
+      ctx.fillStyle = affordable ? '#fff' : 'rgba(255,255,255,.4)';
+      ctx.fillText(s.label, 0, 22);
+    } else {
+      // dug — empty hole
+      ctx.fillStyle='#7a5530';
+      ctx.beginPath();ctx.ellipse(0,0,38,12,0,0,7);ctx.fill();
+      ctx.strokeStyle='#3a4a5a';ctx.lineWidth=3;ctx.stroke();
+      ctx.fillStyle='#5a3a20';
+      ctx.beginPath();ctx.ellipse(0,2,30,8,0,0,7);ctx.fill();
+      // small dug item peek if revealed
+      if(s.item){
+        ctx.font='bold 22px sans-serif';ctx.textAlign='center';
+        ctx.fillText(s.item.emoji, 0, -4);
+      }
+    }
+    ctx.restore();
+  }
+  // Continue button hint (drawn on canvas above the action button)
+  if(walkStage==='scene'){
+    const anyAffordable = sceneSpots.some(s=>!s.dug && energy>=s.cost);
+    if(!anyAffordable && !sceneSpots.every(s=>s.dug)){
+      ctx.fillStyle='#fff';ctx.font='bold 13px sans-serif';ctx.textAlign='center';
+      ctx.strokeStyle='rgba(58,74,90,.5)';ctx.lineWidth=3;
+      const msg='Not enough bond — tap Continue';
+      ctx.strokeText(msg,W/2,H*0.52);ctx.fillText(msg,W/2,H*0.52);
+    }
+  }
+}
+
+/* ---------- particle render ---------- */
+function stepParticles(){
+  for(let i=particles.length-1;i>=0;i--){
+    const p=particles[i];
+    p.x+=p.vx;p.y+=p.vy;p.vy+=0.12;p.life-=0.02;p.spin+=0.1;
+    if(p.life<=0){particles.splice(i,1);continue;}
+    ctx.save();ctx.globalAlpha=p.life;ctx.translate(p.x,p.y);ctx.rotate(p.spin*0.3);
+    if(p.kind==='heart'){ctx.fillStyle='#ff8fa3';ctx.font='bold '+p.r*2+'px sans-serif';ctx.fillText('♥',-p.r/2,p.r/2);}
+    else if(p.kind==='fur'){ctx.fillStyle='#ffd9a8';ctx.beginPath();ctx.ellipse(0,0,p.r,p.r*0.55,0,0,7);ctx.fill();}
+    else if(p.kind==='dirt'){ctx.fillStyle='#9a7440';ctx.beginPath();ctx.arc(0,0,p.r*0.6,0,7);ctx.fill();}
+    else{ctx.fillStyle='#ffd95e';ctx.font='bold '+p.r*2.4+'px sans-serif';ctx.fillText('✦',-p.r/2,p.r/2);}
+    ctx.restore();}
+  for(let i=floaters.length-1;i>=0;i--){
+    const f=floaters[i];f.y-=1.3;f.life-=0.018;
+    if(f.life<=0){floaters.splice(i,1);continue;}
+    ctx.save();ctx.globalAlpha=Math.min(1,f.life*1.4);
+    ctx.fillStyle=f.color;ctx.font='bold 19px sans-serif';
+    ctx.strokeStyle='rgba(58,74,90,.5)';ctx.lineWidth=3;ctx.textAlign='center';
+    ctx.strokeText(f.text,f.x,f.y);ctx.fillText(f.text,f.x,f.y);ctx.restore();}
+}
+
+/* ---------- DOM refs ---------- */
+const ecount=document.getElementById('ecount');
+const promptEl=document.getElementById('prompt');
+const comboEl=document.getElementById('combo');
+const actionBtn=document.getElementById('action');
+const endcard=document.getElementById('endcard');
+const timerbar=document.getElementById('timerbar');
+const timerfill=document.getElementById('timerfill');
+const endTitle=document.getElementById('endTitle');
+const endBlurb=document.getElementById('endBlurb');
+const bagList=document.getElementById('bagList');
+function setEnergy(v){energy=Math.max(0,v);ecount.textContent=energy;}
+
+/* ---------- Nuzz: player-named pet + saved state (localStorage, no backend) ---------- */
+const daytagEl=document.getElementById('daytag');
+const namecard=document.getElementById('namecard');
+const nameInput=document.getElementById('nameInput');
+const nameGo=document.getElementById('nameGo');
+let petName='Biscuit';   // neutral cute default; the player names their own pet
+function setDaytag(){ daytagEl.textContent='Day 1 · '+petName; }
+function savePet(){ try{localStorage.setItem('nuzz:pet',JSON.stringify({name:petName,character:'default'}));}catch(e){} }
+function saveProgress(){ try{localStorage.setItem('nuzz:progress',JSON.stringify({bestCombo:bestCombo,perfect:perfectCount}));}catch(e){} }
+function confirmName(){
+  petName=((nameInput.value||'').trim().slice(0,16))||'Biscuit';
+  savePet(); setDaytag();
+  namecard.classList.remove('show');
+}
+nameGo.addEventListener('click',confirmName);
+nameInput.addEventListener('keydown',e=>{ if(e.key==='Enter')confirmName(); });
+(function initPet(){
+  let saved=null; try{saved=JSON.parse(localStorage.getItem('nuzz:pet')||'null');}catch(e){}
+  if(saved&&saved.name){ petName=saved.name; setDaytag(); }
+  else { setDaytag(); namecard.classList.add('show'); setTimeout(()=>nameInput.focus(),60); }
+})();
+
+/* ---------- petting (cuddle phase) ---------- */
+function petAt(x,y,pid){
+  if(petTimer<=0)return;                 // round's over — no farming points past the buzzer
+  const dx=x-dogPos.x,dy=y-dogPos.y;
+  if(Math.hypot(dx,dy)>130*dogPos.scale)return;
+  const now=performance.now();
+  if(petThrottle[pid]&&now-petThrottle[pid]<60)return;
+  petThrottle[pid]=now;
+  combo++;comboTimer=90;
+  comboEl.textContent='GOOD DOG ×'+combo;
+  comboEl.style.opacity=combo>1?1:0;
+  dogSquash=0.9;dogWag=t;dogEarFlick=1;dogHappy=Math.min(1,dogHappy+0.15);
+  burst(x,y,2,'heart');burst(x,y,3,'fur');purr();
+  // Base ENERGY: gated GLOBALLY (fingers don't multiply it) but combo-scaled, so a hot
+  // streak makes the counter CLIMB — that's the explosive fun. Bounded, but generous.
+  if(now-lastBaseGain>=BASE_MS){
+    lastBaseGain=now;
+    const gain=Math.min(5,1+Math.floor(combo/12));
+    floater(x,y-20,'+'+gain,'#fff');
+    setEnergy(energy+gain);
+  }
+}
+function checkSpotCombo(){
+  if(phase!=='bond'||activeSpots.length===0||spotLock>0)return;
+  const touchList=Object.values(touches);
+  if(touchList.length<activeSpots.length)return;
+  for(const s of activeSpots){
+    const p=spotXY(s.key);
+    const hit=touchList.some(tc=>Math.hypot(tc.x-p.x,tc.y-p.y)<44*dogPos.scale);
+    if(!hit)return;
+  }
+  const n=activeSpots.length;
+  const bonus=n===1?SPOT_BONUS_1:(n===2?SPOT_BONUS_2:SPOT_BONUS_3);
+  const center=spotXY(activeSpots[0].key);
+  shake=6+n*3;dogHappy=1;
+  burst(center.x,center.y,10+n*6,'heart');
+  burst(center.x,center.y,6+n*5,'spark');
+  floater(W/2,H*0.42,n===1?'SWEET SPOT! +'+bonus:(n===2?'DOUBLE SCRATCH! +'+bonus:'TRIPLE BLISS!! +'+bonus),'#ffd95e');
+  jackpot();
+  setEnergy(energy+bonus);
+  spotLock=6;           // tiny debounce so one cover can't score twice in a frame
+  rollSpots();          // instantly roll a fresh set — keep the catches chaining!
+}
+
+/* ---------- walk: investigations ---------- */
+function startScene(){
+  buildScene();
+  walkStage='scene';walkStageT=0;
+  activeSpot=-1;
+  promptEl.textContent='Biscuit found a spot! Tap something to investigate.';
+  promptEl.style.opacity=1;
+  actionBtn.textContent='Continue →';
+  actionBtn.classList.add('show');
+  blip(523,0.12,'sine',0.13);
+}
+function tapInvestigation(x,y){
+  if(walkStage!=='scene')return false;
+  for(let i=0;i<sceneSpots.length;i++){
+    const s=sceneSpots[i];
+    if(s.dug)continue;
+    const dx=x-s.x, dy=y-s.y;
+    // hit radius scaled by perspective
+    if(Math.abs(dx)<48*s.scale && Math.abs(dy)<34*s.scale){
+      if(energy < s.cost){
+        floater(s.x, s.y-50, 'need 🦴 '+s.cost+'!', '#ff8fa3');
+        blip(180,0.12,'square',0.08);
+        return true;
+      }
+      // pay cost, start dig
+      setEnergy(energy - s.cost);
+      floater(s.x, s.y-50, '-'+s.cost+' 🦴', '#fff');
+      activeSpot = i;
+      walkStage='digging';walkStageT=0;
+      actionBtn.classList.remove('show');
+      promptEl.textContent='*digging…*';
+      // Move dog toward this spot
+      return true;
+    }
+  }
+  return false;
+}
+function finishDig(){
+  const s = sceneSpots[activeSpot];
+  const pool = s.tier==='easy'?TIER_EASY : (s.tier==='med'?TIER_MED:TIER_HARD);
+  s.item = pickFrom(pool);
+  s.dug = true;
+  bag.push(s.item);
+  // Reveal feedback by tone
+  if(s.item.tone==='great'){
+    jackpot();burst(s.x,s.y-30,14,'spark');burst(s.x,s.y-30,8,'heart');
+    floater(s.x,s.y-60, '✨ '+s.item.emoji+' '+s.item.name+'!', '#ffd95e');
+    dogHappy=Math.min(1,dogHappy+0.3);
+  } else if(s.item.tone==='good'){
+    blip(660,0.14,'sine',0.14);setTimeout(()=>blip(880,0.14,'sine',0.14),100);
+    burst(s.x,s.y-30,8,'heart');
+    floater(s.x,s.y-60, s.item.emoji+' '+s.item.name, '#ffffff');
+    dogHappy=Math.min(1,dogHappy+0.2);
+  } else if(s.item.tone==='awful'){
+    sadTrombone();shake=8;
+    floater(s.x,s.y-60, '😬 '+s.item.emoji+' '+s.item.name, '#ff8fa3');
+  } else if(s.item.tone==='bad'){
+    sadTrombone();
+    floater(s.x,s.y-60, s.item.emoji+' '+s.item.name+' (eww)', '#ff8fa3');
+  } else {
+    blip(440,0.10,'sine',0.10);
+    floater(s.x,s.y-60, s.item.emoji+' '+s.item.name, '#ffffff');
+  }
+  walkStage='reveal';walkStageT=0;
+}
+function endScene(){
+  // Spots fade away, walking resumes
+  walkStage='departing';walkStageT=0;
+  actionBtn.classList.remove('show');
+  actionBtn.textContent='Hit the trail! →';
+  promptEl.textContent='';
+  sceneIdx++;
+}
+function finishWalk(){
+  phase='done';
+  promptEl.style.opacity=0;
+  actionBtn.classList.remove('show');
+  bagList.textContent = bag.length
+    ? bag.map(it=>it.emoji+' '+it.name).join(', ')
+    : 'nothing — Biscuit was very well-behaved.';
+  // Flavor blurb
+  const hasAwful = bag.some(it=>it.tone==='awful');
+  const hasGreat = bag.some(it=>it.tone==='great');
+  const hasClue  = bag.some(it=>it.clue);
+  let blurb='A good walk. Biscuit\'s tired and you\'ve got things to sort through.';
+  if(hasClue) blurb='Something on that find is going to matter tomorrow. Sleep on it.';
+  else if(hasGreat && !hasAwful) blurb='You came home richer than you left. Treat tomorrow.';
+  else if(hasAwful) blurb='Wash your hands. Wash HIS hands. Wash everything. But what a walk.';
+  else if(bag.length===0) blurb='A quiet walk — sometimes that\'s the win.';
+  endBlurb.textContent = blurb;
+  setTimeout(()=>{endcard.style.display='flex';},900);
+}
+
+/* ---------- out of bond → quick top-up cuddle ---------- */
+function tryTopUp(){
+  if(energy >= EASY_COST) return false;
+  phase='bond';
+  petTimer=ROUND*0.5;
+  timerbar.style.display='block';
+  rollSpots();
+  actionBtn.classList.remove('show');
+  promptEl.textContent='Biscuit needs some love! Quick cuddle…';
+  promptEl.style.opacity=1;
+  blip(330,0.2,'sine',0.12);
+  return true;
+}
+
+/* ---------- touch handling ---------- */
+function pointsFrom(e){
+  const r=cv.getBoundingClientRect();
+  if(e.touches)return Array.from(e.touches).map(tc=>({x:tc.clientX-r.left,y:tc.clientY-r.top,id:tc.identifier}));
+  return [{x:e.clientX-r.left,y:e.clientY-r.top,id:'mouse'}];
+}
+function handleDown(e){
+  e.preventDefault();
+  for(const p of pointsFrom(e)){
+    touches[p.id]=p;
+    if(phase==='intro'){startRound();return;}
+    if(phase==='bond')petAt(p.x,p.y,p.id);
+    if(phase==='course') coursePress();
+    if(phase==='walk' && walkStage==='scene') tapInvestigation(p.x,p.y);
+  }
+}
+function handleMove(e){
+  e.preventDefault();
+  for(const p of pointsFrom(e)){
+    touches[p.id]=p;
+    if(phase==='bond')petAt(p.x,p.y,p.id);
+  }
+}
+function handleUp(e){
+  if(e.touches){
+    const ids=new Set(Array.from(e.touches).map(tc=>tc.identifier));
+    for(const k of Object.keys(touches))if(k!=='mouse'&&!ids.has(Number(k)))delete touches[k];
+  } else delete touches['mouse'];
+  if(phase==='course' && Object.keys(touches).length===0) courseRelease();
+}
+cv.addEventListener('touchstart',handleDown,{passive:false});
+cv.addEventListener('touchmove',handleMove,{passive:false});
+cv.addEventListener('touchend',handleUp);
+cv.addEventListener('touchcancel',handleUp);
+cv.addEventListener('mousedown',handleDown);
+cv.addEventListener('mousemove',e=>{if(e.buttons)handleMove(e);});
+cv.addEventListener('mouseup',handleUp);
+
+/* ---------- flow ---------- */
+function startRound(){
+  phase='bond';
+  petTimer=ROUND;
+  timerbar.style.display='block';
+  rollSpots();
+  promptEl.textContent='Scratch fast! Cover ALL the glowing spots at once for mega points!';
+}
+actionBtn.addEventListener('click',()=>{
+  if(phase==='bond'){ returningToCourse ? resumeCourse() : beginCourse(); return; }
+  if(phase==='walk' && walkStage==='scene'){endScene();return;}
+});
+function beginWalk(){
+  // NOTE: sceneIdx is NOT reset here — preserved across top-up cuddles
+  phase='walk';
+  walkStage='walking';walkStageT=0;
+  actionBtn.classList.remove('show');
+  actionBtn.textContent='Hit the trail! →';
+  timerbar.style.display='none';
+  comboEl.style.opacity=0;
+  promptEl.textContent='On the trail with Biscuit…';
+  promptEl.style.opacity=1;
+  blip(392,0.15,'sine',0.15);blip(523,0.15,'sine',0.12);
+}
+document.getElementById('replay').addEventListener('click',()=>{
+  phase='intro';setEnergy(0);combo=0;dogHappy=0;
+  trailScroll=0;
+  bag.length=0;
+  sceneIdx=0;walkStage='walking';walkStageT=0;activeSpot=-1;
+  sceneSpots=[];
+  courseStage='intro';hurdles.length=0;spawnedCount=0;clearedCount=0;
+  perfectCount=0;bestCombo=0;grounded=true;jumpY=0;jumpVel=0;returningToCourse=false;
+  hurdlesPassed=0;courseSpeed=COURSE_SPEED0;holding=false;holdFrames=0;
+  trees.length=0;for(let i=0;i<8;i++)spawnTree();
+  endcard.style.display='none';
+  timerbar.style.display='none';
+  actionBtn.classList.remove('show');
+  actionBtn.textContent='Hit the trail! →';
+  promptEl.textContent='Tap to start the cuddle round!';
+  promptEl.style.opacity=1;
+});
+
+/* ---------- walk: state machine ---------- */
+function updateWalk(){
+  walkStageT++;
+  const scrollSpeed = (walkStage==='walking') ? 1
+                    : (walkStage==='arrive') ? Math.max(0.1, 1 - walkStageT/60)
+                    : (walkStage==='departing') ? Math.min(1, walkStageT/60)
+                    : 0.05;
+  trailScroll += 0.012 * scrollSpeed;
+  stepTrees(scrollSpeed);
+
+  if(walkStage==='walking'){
+    if(walkStageT > 60*3.5 + Math.random()*60*1.5){ // 3.5–5s of trotting between scenes
+      walkStage='arrive';walkStageT=0;
+      promptEl.textContent='Biscuit slows down — he found a spot…';
+      dogEarFlick=1;
+    }
+  } else if(walkStage==='arrive'){
+    if(walkStageT > 60){
+      startScene();
+    }
+  } else if(walkStage==='scene'){
+    // player drives this: tapping spots or Continue
+  } else if(walkStage==='digging'){
+    // Dirt particles while digging
+    const s = sceneSpots[activeSpot];
+    if(s){
+      if(walkStageT%5===0) burst(s.x, s.y-4, 3, 'dirt');
+      if(walkStageT%14===0) digSound();
+    }
+    if(walkStageT > 80){
+      finishDig();
+    }
+  } else if(walkStage==='reveal'){
+    if(walkStageT > 80){
+      activeSpot=-1;
+      // Back to scene — player can tap another or Continue
+      walkStage='scene';walkStageT=0;
+      actionBtn.classList.add('show');
+      promptEl.textContent='Anything else? Or tap Continue →';
+    }
+  } else if(walkStage==='departing'){
+    if(walkStageT > 90){
+      if(sceneIdx >= SCENES_PER_WALK){
+        finishWalk();
+      } else if(!tryTopUp()){
+        walkStage='walking';walkStageT=0;
+        promptEl.textContent='Back on the trail…';
+      }
+    }
+  }
+}
+
+function drawWalkDog(){
+  // Dog position depends on stage
+  let x = W*0.5, y = H*0.74, scale = 1.6;
+  let headDown=0, digging=0;
+  if(walkStage==='walking'){
+    y += Math.sin(t*0.18)*1.5;
+  } else if(walkStage==='arrive'){
+    headDown = Math.min(1, walkStageT/45);
+    y += Math.sin(t*0.12)*1.2;
+  } else if(walkStage==='scene'){
+    headDown=0.5;
+    y += Math.sin(t*0.10)*1;
+  } else if(walkStage==='digging'){
+    const s = sceneSpots[activeSpot];
+    if(s){
+      // move toward spot, then shake while digging
+      const target = {x:s.x, y:s.y - 30, scale: 1.0 + s.scale*0.5};
+      const k = Math.min(1, walkStageT/30);
+      x = W*0.5 + (target.x - W*0.5)*k;
+      y = H*0.74 + (target.y - H*0.74)*k;
+      scale = 1.6 + (target.scale - 1.6)*k;
+      headDown = 1;
+      digging = walkStageT>30 ? Math.sin(t*0.6)*0.3+0.7 : 0;
+      if(walkStageT>30){ y += Math.sin(t*0.8)*2; }
+    }
+  } else if(walkStage==='reveal'){
+    const s = sceneSpots[activeSpot] || sceneSpots[sceneSpots.length-1];
+    if(s){
+      const k = Math.max(0, 1 - walkStageT/40);
+      const target = {x:s.x, y:s.y - 30, scale: 1.0 + s.scale*0.5};
+      x = W*0.5 + (target.x - W*0.5)*k;
+      y = H*0.74 + (target.y - H*0.74)*k;
+      scale = 1.6 + (target.scale - 1.6)*k;
+      headDown = 0.3;
+    }
+  } else if(walkStage==='departing'){
+    y += Math.sin(t*0.18)*1.5;
+  }
+  drawDogBehind(x, y, scale, {headDown, digging});
+}
+
+/* ---------- course: the agility run (Chapter 1) ---------- */
+function beginCourse(){
+  phase='course'; courseStage='running'; courseT=0; courseScroll=0;
+  hurdles.length=0; spawnedCount=0; clearedCount=0; perfectCount=0; bestCombo=0;
+  hurdlesPassed=0; courseSpeed=COURSE_SPEED0;
+  jumpY=0; jumpVel=0; jumpElapsed=0; grounded=true; holding=false; holdFrames=0;
+  nextSpawn=70; returningToCourse=false;
+  combo=0; comboEl.style.opacity=0;
+  timerbar.style.display='none';
+  actionBtn.classList.remove('show');
+  promptEl.textContent='Stamina '+energy+' 🦴 · a full run needs ~'+(COURSE_HURDLES*COST_GOOD)
+    +'. Tap to hop, HOLD to leap!';
+  promptEl.style.opacity=1;
+  blip(392,0.12,'sine',0.14); blip(523,0.12,'sine',0.12);
+}
+function coursePress(){
+  if(phase!=='course' || courseStage!=='running') return;
+  holding=true;
+  if(grounded){              // launch a leap; holding it makes her float higher
+    grounded=false; jumpVel=-JUMP_V; jumpElapsed=0; holdFrames=0;
+    dogEarFlick=1;
+    blip(560,0.07,'square',0.10);
+  }
+}
+function courseRelease(){ holding=false; }
+function judgeHurdle(h, dogX, groundY){
+  h.judged=true;
+  hurdlesPassed++;                     // every bar she passes ramps the pace up a notch
+  courseSpeed=Math.min(COURSE_SPEED_MAX, COURSE_SPEED0 + hurdlesPassed*SPEED_RAMP);
+  const clearance = -jumpY;            // how high her feet are above the track
+  const bh = h.barH;
+  if(grounded || clearance < bh){
+    // BONK — too low (didn't hold long enough) or mistimed. Combo breaks, no fail.
+    h.result='miss'; h.knocked=true;
+    combo=0; comboEl.style.opacity=0;
+    setEnergy(energy - COST_MISS);
+    shake=10; sadTrombone();
+    floater(dogX, groundY-90, 'BONK!', '#ff8fa3');
+    dogHappy=Math.max(0,dogHappy-0.2);
+  } else if(clearance >= bh + PERFECT_MARGIN){
+    h.result='perfect';
+    combo++; comboTimer=120; clearedCount++; perfectCount++;
+    bestCombo=Math.max(bestCombo,combo);
+    comboEl.textContent='CLEAN ×'+combo; comboEl.style.opacity=1;
+    setEnergy(energy - COST_PERFECT);
+    burst(dogX, groundY-clearance, 8,'heart'); burst(dogX, groundY-clearance, 6,'spark');
+    jackpot();
+    floater(dogX, groundY-clearance-22, 'PERFECT! ×'+combo, '#ffd95e');
+    dogHappy=Math.min(1,dogHappy+0.25);
+  } else {
+    h.result='good';
+    combo++; comboTimer=120; clearedCount++;
+    bestCombo=Math.max(bestCombo,combo);
+    comboEl.textContent='CLEAN ×'+combo; comboEl.style.opacity=1;
+    setEnergy(energy - COST_GOOD);
+    burst(dogX, groundY-clearance, 5,'heart');
+    blip(660,0.10,'sine',0.13);
+    floater(dogX, groundY-clearance-22, 'CLEAR! ×'+combo, '#fff');
+    dogHappy=Math.min(1,dogHappy+0.15);
+  }
+}
+function topUpFromCourse(){
+  // Ran the stamina bar dry — quick cuddle to catch her breath, then resume.
+  phase='bond'; petTimer=ROUND*0.5; returningToCourse=true;
+  timerbar.style.display='block';
+  rollSpots();
+  combo=0; comboEl.style.opacity=0;
+  actionBtn.classList.remove('show');
+  promptEl.textContent="Biscuit's winded! Quick cuddle to catch her breath…";
+  promptEl.style.opacity=1;
+  blip(330,0.2,'sine',0.12);
+}
+function resumeCourse(){
+  phase='course'; courseStage='running'; returningToCourse=false;
+  timerbar.style.display='none';
+  comboEl.style.opacity=0;
+  actionBtn.classList.remove('show');
+  promptEl.textContent='Back at it — mind the hurdles!';
+  promptEl.style.opacity=1;
+  nextSpawn = courseT + 60;            // a short grace before the next bar
+}
+function updateCourse(){
+  if(courseStage!=='running' && courseStage!=='finish') return;
+  courseT++; courseScroll += courseSpeed;
+  const dogX=W*0.30, groundY=courseGroundY();
+
+  // leap physics (jumpY is negative when airborne). While you HOLD and she's still
+  // rising, gravity is gentler so she climbs higher — release (or the hold cap) to fall.
+  if(!grounded){
+    jumpElapsed++;
+    jumpY += jumpVel;
+    const lifting = holding && holdFrames<HOLD_MAX_FR && jumpVel<0;
+    jumpVel += lifting ? JUMP_GRAV_HOLD : JUMP_GRAV;
+    if(holding) holdFrames++;
+    if(lifting && courseT%3===0) burst(dogX, groundY+jumpY, 1, 'spark'); // "charging" sparkle
+    if(jumpY>=0){ jumpY=0; jumpVel=0; grounded=true; holdFrames=0; }
+  }
+  if(grounded && courseStage==='running' && courseT%6===0)
+    burst(dogX-30*COURSE_DOG_SCALE, groundY-2, 2, 'dirt'); // running dust
+  if(courseStage==='running'){               // sprint face: tongue out, ears flapping
+    dogHappy=Math.max(dogHappy,0.6);
+    dogEarFlick=0.4+0.35*Math.sin(t*0.5);
+  }
+
+  // move every hurdle left; judge the instant it passes Biscuit's line
+  for(const h of hurdles){
+    const prev=h.x; h.x -= courseSpeed;
+    if(!h.judged && prev>dogX && h.x<=dogX) judgeHurdle(h, dogX, groundY);
+  }
+  for(let i=hurdles.length-1;i>=0;i--) if(hurdles[i].x<-80) hurdles.splice(i,1);
+
+  if(courseStage==='running'){
+    if(spawnedCount < COURSE_HURDLES && courseT >= nextSpawn){
+      hurdles.push({x:W+50, judged:false, result:null, knocked:false,
+                    tint:HURDLE_TINTS[spawnedCount%HURDLE_TINTS.length],
+                    barH:Math.min(BAR_MAX, BAR_BASE + spawnedCount*BAR_RAMP)});
+      spawnedCount++;
+      nextSpawn = courseT + Math.max(55, HURDLE_GAP - hurdlesPassed*GAP_RAMP);
+    }
+    if(energy<=0){                                 // out of stamina mid-course = fail
+      const allJudged = spawnedCount>=COURSE_HURDLES && hurdles.every(h=>h.judged);
+      if(!allJudged){ failCourse(); return; }      // (unless the last bar's already cleared)
+    }
+    if(spawnedCount>=COURSE_HURDLES && hurdles.length===0){
+      courseStage='finish'; courseT=0;
+      promptEl.textContent='Finish line! 🏁';
+    }
+  } else if(courseStage==='finish'){
+    if(courseT>70) finishCourse();
+  }
+}
+function finishCourse(){
+  phase='done';
+  promptEl.style.opacity=0;
+  actionBtn.classList.remove('show');
+  const misses = COURSE_HURDLES - clearedCount;
+  let ribbon,title,blurb;
+  if(perfectCount===COURSE_HURDLES){
+    ribbon='🥇'; title='Perfect Run!';
+    blurb='Not a bar touched and every leap dead-on. '+petName+' is the best in the ring.';
+  } else if(misses===0){
+    ribbon='🥈'; title='Clear Round!';
+    blurb='Clean over every hurdle — a little ragged on the timing, but a clear round is a clear round!';
+  } else {
+    ribbon='🥉'; title='Good Run!';
+    blurb='A few bars came down, but '+petName+' had the time of their life out there.';
+  }
+  endTitle.textContent = ribbon+' '+title;
+  endBlurb.textContent = blurb;
+  bagList.textContent = 'Clean clears '+clearedCount+'/'+COURSE_HURDLES
+    +'  ·  Perfect leaps '+perfectCount+'  ·  Best combo ×'+bestCombo;
+  document.querySelector('#endcard .eyebrow').textContent='Course complete!';
+  document.querySelector('.bagshelf .head').textContent='Your scorecard';
+  document.getElementById('stamp').textContent='★ CHAPTER 1 — '+title.replace('!','').toUpperCase()+' ★';
+  document.querySelector('#endcard p:last-of-type').textContent='Come back tomorrow for another little nuzzle.';
+  saveProgress();
+  setTimeout(()=>{endcard.style.display='flex';},900);
+}
+function failCourse(){
+  phase='done';
+  promptEl.style.opacity=0;
+  actionBtn.classList.remove('show');
+  sadTrombone(); shake=12;
+  endTitle.textContent='😮‍💨 Too Tired!';
+  endBlurb.textContent=petName+" ran out of steam before the finish. Next time give them a "
+    +"better cuddle — chase the glowing sweet spots, they're worth far more than plain "
+    +"scratches — so there's stamina for the whole course.";
+  bagList.textContent='Cleared '+clearedCount+' of '+COURSE_HURDLES+' hurdles before running dry.';
+  document.querySelector('#endcard .eyebrow').textContent='Out of stamina';
+  document.querySelector('.bagshelf .head').textContent='How far you got';
+  document.getElementById('stamp').textContent='★ SO CLOSE — TRY AGAIN ★';
+  document.querySelector('#endcard p:last-of-type').textContent='Tip: 2 spots at once is worth far more than two single scratches.';
+  saveProgress();
+  setTimeout(()=>{endcard.style.display='flex';},700);
+}
+
+/* ---------- course: drawing ---------- */
+function drawHurdle(h, groundY){
+  const bh = h.barH||BAR_BASE;
+  ctx.save(); ctx.translate(h.x, groundY);
+  ctx.lineWidth=3.5; ctx.strokeStyle='#3a4a5a'; ctx.lineJoin='round';
+  // feet
+  ctx.fillStyle='#fff';
+  ctx.beginPath(); ctx.roundRect(-21,-5,17,6,2); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.roundRect( 4,-5,17,6,2); ctx.fill(); ctx.stroke();
+  // posts
+  ctx.beginPath(); ctx.roundRect(-15,-bh,5,bh,2); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.roundRect( 10,-bh,5,bh,2); ctx.fill(); ctx.stroke();
+  // crossbar — tilts off if she knocked it
+  ctx.save();
+  if(h.knocked){ ctx.translate(0,-bh+6); ctx.rotate(0.5); ctx.translate(0,bh-6); }
+  ctx.fillStyle= h.knocked ? '#e07a8a' : (h.tint||'#ff8fa3');
+  ctx.beginPath(); ctx.roundRect(-17,-bh-7,34,9,3); ctx.fill(); ctx.stroke();
+  ctx.restore();
+  ctx.restore();
+}
+function drawCourse(){
+  drawSky();
+  const groundY=courseGroundY(), dogX=W*0.30, scale=COURSE_DOG_SCALE;
+  // grass + track
+  ctx.fillStyle='#9ed468'; ctx.fillRect(0,groundY-40,W,H-(groundY-40));
+  ctx.fillStyle='#b4e088'; ctx.fillRect(0,groundY-40,W,10);
+  ctx.fillStyle='#f6d68a'; ctx.fillRect(0,groundY,W,28);
+  ctx.fillStyle='#e9c46a';
+  for(let i=0;i<16;i++){
+    const dx=(((i*70 - courseScroll)%(W+70))+(W+70))%(W+70)-35;
+    ctx.fillRect(dx,groundY+12,30,4);                 // scrolling lane dashes = speed
+  }
+  // whoosh speed streaks ripping past in the air
+  ctx.strokeStyle='rgba(255,255,255,0.32)'; ctx.lineWidth=2.5; ctx.lineCap='round';
+  for(let i=0;i<8;i++){
+    const len=44+(i%3)*28;
+    const sx=(((i*123 - courseScroll*1.5)%(W+200))+(W+200))%(W+200)-100;
+    const sy=groundY-64-((i*37)%170);
+    ctx.beginPath(); ctx.moveTo(sx,sy); ctx.lineTo(sx+len,sy); ctx.stroke();
+  }
+  for(const h of hurdles) drawHurdle(h, groundY);
+  // shadow shrinks as she rises
+  const clear=-jumpY;
+  ctx.fillStyle='rgba(58,74,90,0.18)';
+  const shW=44*scale*(1-Math.min(0.6,clear/120));
+  ctx.beginPath(); ctx.ellipse(dogX, groundY+5, shW, 8, 0,0,7); ctx.fill();
+  // Biscuit (side view faces right): fast bob grounded, lean into the run,
+  // nose-up on the rise & nose-down on the descent through a leap.
+  const bob = grounded ? Math.abs(Math.sin(t*0.6))*3 : 0;
+  const cy = groundY - 46*scale + bob + jumpY;
+  const lean = grounded ? 0.1 : Math.max(-0.35, Math.min(0.35, jumpVel*0.025));
+  dogPos={x:dogX,y:cy,scale:scale};
+  // motion ghost trailing behind when sprinting
+  ctx.save(); ctx.globalAlpha=0.16; ctx.translate(-12,0);
+  ctx.translate(dogX,cy); ctx.rotate(lean); ctx.translate(-dogX,-cy);
+  drawDog(dogX, cy, scale); ctx.restore();
+  // Biscuit herself
+  ctx.save(); ctx.translate(dogX,cy); ctx.rotate(lean); ctx.translate(-dogX,-cy);
+  drawDog(dogX, cy, scale); ctx.restore();
+  // PACE meter — fills a pip each time the speed ramps up
+  ctx.textAlign='center'; ctx.fillStyle='#fff'; ctx.font='bold 11px sans-serif';
+  ctx.strokeStyle='rgba(58,74,90,.45)'; ctx.lineWidth=3;
+  ctx.strokeText('PACE',W/2,30); ctx.fillText('PACE',W/2,30);
+  const pw=14,gp=4,total=COURSE_HURDLES*(pw+gp)-gp,x0=W/2-total/2;
+  for(let i=0;i<COURSE_HURDLES;i++){
+    ctx.fillStyle = i<hurdlesPassed ? '#ff8fa3' : 'rgba(255,255,255,.4)';
+    ctx.beginPath(); ctx.roundRect(x0+i*(pw+gp),36,pw,8,3); ctx.fill();
+  }
+}
+
+/* ---------- main loop ---------- */
+function frame(){
+  t++;
+  if(comboTimer>0){comboTimer--;}else if(combo>0){combo=0;comboEl.style.opacity=0;}
+  dogSquash+=(1-dogSquash)*0.2;dogEarFlick*=0.85;dogHappy*=0.996;
+  dogWag+=0.15+dogHappy*0.3;
+  if(shake>0)shake*=0.85;
+
+  if(phase==='bond'){
+    const goLabel = returningToCourse ? 'Back to the course! →' : 'Start the course! →';
+    if(petTimer>0){
+      if(spotLock>0)spotLock--;
+      checkSpotCombo();
+      spotTTL--;if(spotTTL<=0)rollSpots();
+      petTimer--;
+      timerfill.style.width=Math.max(0,petTimer/ROUND*100)+'%';
+      if(petTimer<ROUND*0.2&&!actionBtn.classList.contains('show')){
+        actionBtn.classList.add('show');
+        actionBtn.textContent=goLabel;
+      }
+    } else if(timerbar.style.display!=='none'){
+      // round over — lock in the score, stop earning, clear the spots
+      timerbar.style.display='none';
+      activeSpots=[];
+      promptEl.textContent = returningToCourse
+        ? 'Caught her breath! Back to the run!'
+        : "⏰ Time's up! Banked "+energy+" 🦴 — make it count!";
+      actionBtn.textContent=goLabel;
+      actionBtn.classList.add('show');
+    }
+  }
+
+  if(phase==='walk') updateWalk();
+  if(phase==='course') updateCourse();
+
+  const sx=(Math.random()-0.5)*shake,sy=(Math.random()-0.5)*shake;
+  ctx.save();ctx.translate(sx,sy);
+
+  if(phase==='intro'){
+    drawSky();drawMeadow(0);
+    dogPos={x:W*0.5,y:H*0.72,scale:1.7};
+    drawDog(dogPos.x,dogPos.y,dogPos.scale);
+    ctx.fillStyle='#fff';ctx.font='bold 16px sans-serif';ctx.textAlign='center';
+    ctx.strokeStyle='rgba(58,74,90,.5)';ctx.lineWidth=3;
+    const m='10s of cuddles → catch the spots for stamina → run the course!';
+    ctx.strokeText(m,W/2,H*0.42);ctx.fillText(m,W/2,H*0.42);
+  }
+  else if(phase==='bond'){
+    drawSky();drawMeadow(0);
+    dogPos={x:W*0.5,y:H*0.72,scale:1.7};
+    drawDog(dogPos.x,dogPos.y,dogPos.scale);
+    drawSpots();
+  }
+  else if(phase==='course'){
+    drawCourse();
+  }
+  else if(phase==='walk' || phase==='done'){
+    drawTrailScene();
+    if(phase==='walk'){
+      drawSceneSpots();
+      drawWalkDog();
+    }
+  }
+
+  stepParticles();
+  ctx.restore();
+  requestAnimationFrame(frame);
+}
+resize();
+requestAnimationFrame(frame);
+})();
+</script>
+<script>
+  // PWA: register the service worker (HTTPS / localhost only).
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () =>
+      navigator.serviceWorker.register("/sw.js").catch(() => {})
+    );
+  }
+</script>
+</body>
+</html>
