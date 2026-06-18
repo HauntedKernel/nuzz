@@ -189,11 +189,13 @@ is on Cloudflare's free tier (D1: 100k writes/day; we use ~3 per play).
 The file now holds **three levels**, chosen at load by URL (`const LEVEL` near the top):
 - **default (`nuzz.pet`) → the bird level, "Feed the Nest"** — the LANDING level as of 2026-06-17.
 - **`nuzz.pet/?dog`** → the **dog** (cuddle → agility course), described above.
-- **`nuzz.pet/?panda`** → **"Falling Pandas"** (added 2026-06-18): comically clumsy pandas slide/tumble
-  down a hill on variable rest→slide→tumble timers toward a bottom-right cliff; **multi-touch drag**
-  them up to the top-left SAFE PEN (pin one finger, grab others). Escapes are harmless (tumble into
-  hay); a graded **zookeeper** verdict ends the round (gold/silver/bronze/oops by escape count).
-  Faked physics — pandas don't truly collide/stack. Tuning: `PANDA_*` consts + thresholds in
+- **`nuzz.pet/?panda`** → **"Falling Pandas"** (added 2026-06-18): **all `PANDA_COUNT` (12) pandas are
+  present from the start**, scattered on a hill; they slide/tumble down on variable rest→slide→tumble
+  timers toward the bottom cliff. **Multi-touch drag** them up past the **SAFETY LINE** at the top
+  (`SAFE_LINE`) — above it they pile up safe (pin one finger, grab others). Round ends when all are
+  saved-or-lost (or the timer runs out). Escapes are harmless (tumble into hay); a graded **zookeeper**
+  verdict ends it (gold/silver/bronze/oops by escape count). Faked physics — no real collisions/stacking.
+  Tuning: `PANDA_*` consts (count, speeds in `pandaSetState`, `SAFE_LINE`/`DANGER_Y`) + thresholds in
   `endPandaRound()`. Phases: `pandaIntro → panda → pandaEnd`.
 
 Each end card (shared `#endcard`) shows a **cross-link** that cycles **nest → dog → panda → nest**
@@ -231,6 +233,20 @@ stores `result` = the verdict tier ('gold'/'silver'/'bronze'/'angry'), `reached`
 `banked` = worms fed, plus `fullness` (%). So the same D1 queries (see GAMEPLAY ANALYTICS) compare
 levels: e.g. `... GROUP BY level, ev` for plays per level, or filter `WHERE ev='run_end' AND
 json_extract(data,'$.level')='nest'` for the nest's verdict spread.
+
+---
+
+## ENGINE NOTES (cross-level)
+
+- **Fixed-timestep loop (since 2026-06-18).** The main loop is split into `update()` (simulation) and
+  `render()` (drawing). `frame(now)` accumulates real elapsed time and runs `update()` in fixed 1/60s
+  steps, rendering once per displayed frame. This makes all movement/timers **refresh-rate-independent**
+  — before this, everything ran ~2× fast on 120Hz phones. Movement is still written in "px per step";
+  the loop just guarantees 60 steps/sec. (Particles step inside `render()`, so they're cosmetic-only.)
+- **Client error reporting.** `window.onerror` / `unhandledrejection` beacon the first ~6 JS errors to
+  `/api/e` as `ev:'error'` (with `lvl`, `msg`, `src`, `line`). Query crashes with
+  `SELECT data FROM events WHERE ev='error' ORDER BY ts DESC`. This is our only visibility into crashes
+  on real devices we can't test.
 
 ---
 
