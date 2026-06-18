@@ -184,6 +184,44 @@ is on Cloudflare's free tier (D1: 100k writes/day; we use ~3 per play).
 
 ---
 
+## LEVELS — the dog, and the bird ("Feed the Nest")
+
+The file now holds **two levels**, chosen at load by URL (`const LEVEL` near the top):
+- default → the **dog** (cuddle → agility course), described above.
+- **`nuzz.pet/?nest`** → the **bird** level, "Feed the Nest" (added 2026-06-17).
+
+**Bird mechanic.** Six baby chicks open/close their beaks on ramping rhythms. You **scoop a worm
+from the patch along the bottom and drag it up into an OPEN beak** (release to drop). Feed a closed
+beak → the worm's wasted. Fed chicks fill up, settle, and stop gaping (so food naturally flows to
+the hungry ones). A gentle hunger decay means a full nest still needs tending. When the 24s timer
+ends, **Mama bird flies home and reacts**, graded like the dog's ribbons and tuned *generous* so a
+happy mama is the norm and the angry dive-bomb is a rare, earned punchline:
+- 🥇 gold (avg fullness ≥ 0.80) · 🥈 silver (≥ 0.58) · 🥉 bronze (≥ 0.34) · 😤 angry (below).
+
+It is **self-contained**: feed → mama's verdict → end card. No second "course" phase — the verdict
+*is* the payoff (each animal gets a different relationship, per the design principles).
+
+**Tuning knobs** (top of the BIRD LEVEL block in `index.html`):
+- `NEST_CHICKS = 6` · `NEST_ROUND = 24*60` (round length) · `FEED_AMOUNT = 0.34` (fullness per worm,
+  ~3 to fill) · `FEED_OPEN_MIN = 0.25` (how open a beak must be to accept food) ·
+  `NEST_RATE0` / `NEST_RATE_RAMP` (open/close speed + how much it accelerates over the round) ·
+  `NEST_DECAY` (hunger creep) · the verdict thresholds are in `endNestRound()`.
+- To rebalance difficulty: raise `NEST_RATE_RAMP` or lower `FEED_AMOUNT`/`NEST_ROUND` (harder);
+  shift the `endNestRound()` thresholds to change how forgiving Mama is.
+
+**The rollout strategy (why ?nest, not the front door yet).** Plan: when a new level is solid it
+becomes the **landing default** so it gets the most exposure; older levels move to a "pick a friend"
+collection; the analytics `level` field tells us which levels people replay; winners get extended
+into missions. New levels bake behind `?…` first so the public front door stays polished.
+
+**Analytics for levels.** Every event now carries `level` ('dog' | 'nest'). The nest's `run_end`
+stores `result` = the verdict tier ('gold'/'silver'/'bronze'/'angry'), `reached` = chicks left full,
+`banked` = worms fed, plus `fullness` (%). So the same D1 queries (see GAMEPLAY ANALYTICS) compare
+levels: e.g. `... GROUP BY level, ev` for plays per level, or filter `WHERE ev='run_end' AND
+json_extract(data,'$.level')='nest'` for the nest's verdict spread.
+
+---
+
 ## PARKED (in the code, not currently reached)
 
 The original **trail / dig-for-treasure** system is still in the file (the `walk` phase, `TIER_*`
@@ -246,6 +284,7 @@ reward for a gold ribbon) or delete if it's in the way.
 | Change the running scene / hurdles art | `drawCourse()` / `drawHurdle()` |
 | Edit the landing strip / social links | `#strip` in the HTML |
 | Reset the saved pet/progress | clear `nuzz:pet` / `nuzz:progress` in localStorage |
+| Play / tune the bird level ("Feed the Nest") | **LEVELS** below · launch `?nest` · `NEST_*` knobs |
 | See how people actually play (plays, fail rate, drop-off) | **GAMEPLAY ANALYTICS** above |
 | Add/change a tracked event | `track(...)` calls in `index.html`; sink is `functions/api/e.js` |
 | Deploy a new version | see **DEPLOY** above |

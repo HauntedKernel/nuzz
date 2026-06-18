@@ -132,7 +132,9 @@ function track(ev,props){try{
 }catch(e){}}
 
 /* ---------- state ---------- */
-/* phases: intro -> bond -> walk -> done.  walk has its own sub-stages (walkStage). */
+/* phases: intro -> bond -> walk -> done.  walk has its own sub-stages (walkStage).
+   The bird level (LEVEL='nest', via ?nest) uses its own phases: nestIntro -> nest -> nestMom -> done. */
+const LEVEL = location.search.indexOf('nest')!==-1 ? 'nest' : 'dog';
 let phase='intro';
 let energy=0;
 let combo=0, comboTimer=0;
@@ -651,6 +653,7 @@ nameInput.addEventListener('keydown',e=>{ if(e.key==='Enter')confirmName(); });
 (function initPet(){
   let saved=null; try{saved=JSON.parse(localStorage.getItem('nuzz:pet')||'null');}catch(e){}
   if(saved&&saved.name){ petName=saved.name; setDaytag(); }
+  else if(LEVEL==='nest'){ setDaytag(); }   // wild nest — no pet to name
   else { setDaytag(); namecard.classList.add('show'); setTimeout(()=>nameInput.focus(),60); }
 })();
 
@@ -816,6 +819,8 @@ function handleDown(e){
   for(const p of pointsFrom(e)){
     touches[p.id]=p;
     if(phase==='intro'){startRound();return;}
+    if(phase==='nestIntro'){startNest();return;}
+    if(phase==='nest') nestGrab(p);
     if(phase==='bond')petAt(p.x,p.y,p.id);
     if(phase==='course') coursePress();
     if(phase==='walk' && walkStage==='scene') tapInvestigation(p.x,p.y);
@@ -826,9 +831,14 @@ function handleMove(e){
   for(const p of pointsFrom(e)){
     touches[p.id]=p;
     if(phase==='bond')petAt(p.x,p.y,p.id);
+    if(phase==='nest') nestDrag(p);
   }
 }
 function handleUp(e){
+  if(phase==='nest' && nestCarry){
+    const stillDown = e.touches ? Array.from(e.touches).some(tc=>tc.identifier===nestCarry.pid) : false;
+    if(!stillDown) nestRelease();
+  }
   if(e.touches){
     const ids=new Set(Array.from(e.touches).map(tc=>tc.identifier));
     for(const k of Object.keys(touches))if(k!=='mouse'&&!ids.has(Number(k)))delete touches[k];
@@ -850,7 +860,7 @@ function startRound(){
   timerbar.style.display='block';
   rollSpots();
   promptEl.textContent='Scratch fast! Cover ALL the glowing spots at once for mega points!';
-  track('start',{returning:!NUZZ_AID.fresh});
+  track('start',{level:'dog',returning:!NUZZ_AID.fresh});
 }
 actionBtn.addEventListener('click',()=>{
   if(phase==='bond'){ returningToCourse ? resumeCourse() : beginCourse(); return; }
@@ -869,6 +879,7 @@ function beginWalk(){
   blip(392,0.15,'sine',0.15);blip(523,0.15,'sine',0.12);
 }
 document.getElementById('replay').addEventListener('click',()=>{
+  if(LEVEL==='nest'){ resetNest(); return; }
   phase='intro';setEnergy(0);combo=0;dogHappy=0;
   trailScroll=0;
   bag.length=0;
@@ -994,7 +1005,7 @@ function beginCourse(){
   promptEl.style.opacity=1;
   blip(392,0.12,'sine',0.14); blip(523,0.12,'sine',0.12);
   courseBanked=energy;                                  // stamina carried into the run
-  track('course',{banked:courseBanked,need:COURSE_HURDLES*COST_GOOD});
+  track('course',{level:'dog',banked:courseBanked,need:COURSE_HURDLES*COST_GOOD});
 }
 function coursePress(){
   if(phase!=='course' || courseStage!=='running') return;
@@ -1137,7 +1148,7 @@ function finishCourse(){
   document.getElementById('stamp').textContent='★ CHAPTER 1 — '+title.replace('!','').toUpperCase()+' ★';
   document.querySelector('#endcard p:last-of-type').textContent='Come back tomorrow for another little nuzzle.';
   saveProgress();
-  track('run_end',{result:'finish',reached:COURSE_HURDLES,banked:courseBanked,
+  track('run_end',{level:'dog',result:'finish',reached:COURSE_HURDLES,banked:courseBanked,
     grade:ribbon,cleared:clearedCount,perfects:perfectCount,combo:bestCombo,left:energy});
   setTimeout(()=>{endcard.style.display='flex';},900);
 }
@@ -1156,7 +1167,7 @@ function failCourse(){
   document.getElementById('stamp').textContent='★ SO CLOSE — TRY AGAIN ★';
   document.querySelector('#endcard p:last-of-type').textContent='Tip: 2 spots at once is worth far more than two single scratches.';
   saveProgress();
-  track('run_end',{result:'fail',reached:hurdlesPassed,banked:courseBanked,
+  track('run_end',{level:'dog',result:'fail',reached:hurdlesPassed,banked:courseBanked,
     cleared:clearedCount,perfects:perfectCount,combo:bestCombo,left:0});
   setTimeout(()=>{endcard.style.display='flex';},700);
 }
@@ -1231,6 +1242,282 @@ function drawCourse(){
   }
 }
 
+/* ===================== BIRD LEVEL — "Feed the Nest" (launch with ?nest) =====================
+   A self-contained level. Six baby chicks open and close their beaks on ramping rhythms; you
+   SCOOP a worm from the patch at the bottom and DROP it into an open beak (drag + release).
+   Feed a closed beak and the worm's wasted. Fill their bellies and they settle, content. When
+   time's up, Mama bird flies home and reacts to how well you fed the nest (graded, generous-
+   tuned so a happy mama is the norm and the angry dive-bomb is a rare, earned punchline). */
+const NEST_CHICKS=6, NEST_ROUND=24*60, FEED_OPEN_MIN=0.25, FEED_AMOUNT=0.34;
+const NEST_RATE0=0.05, NEST_RATE_RAMP=0.045, NEST_DECAY=0.0005, WORM_ZONE=0.78;
+let chicks=[], nestCarry=null;
+let nestTimer=0, nestRamp=0, nestFed=0, bestNestCombo=0, nestWarned=false;
+let momT=0, nestVerdict='silver', nestAvg=0, nestHappy=0, nestEnded=false;
+
+function buildNest(){           // positions are FRACTIONAL (fx) so the nest is resize-proof
+  chicks=[];
+  for(let i=0;i<NEST_CHICKS;i++){
+    chicks.push({ fx: NEST_CHICKS===1?0.5:i/(NEST_CHICKS-1), back:i%2===0, sc:(i%2===0)?0.9:1.08,
+      ph:i*1.7, rate:NEST_RATE0*(0.8+0.5*((i*3)%4)/3), full:0.12, fed:0, gulp:0, blink:(i*53)%200 });
+  }
+}
+function chickXY(c){
+  const cx=W/2, span=Math.min(W*0.72,330);
+  return { x: cx+(c.fx-0.5)*span, y: H*0.50 + (c.back?-14:12) - Math.sin(c.fx*Math.PI)*6 };
+}
+function chickOpenNow(c){        // 0..1 mouth openness; damped to ~0 once a chick is full
+  const ramp = phase==='nest' ? nestRamp*NEST_RATE_RAMP : 0;
+  return Math.max(0, Math.sin(t*(c.rate+ramp)+c.ph)) * (0.32+0.68*(1-c.full));
+}
+function chickAt(x,y){           // the most-open chick under (x,y) that's open enough to feed
+  let best=null,bo=FEED_OPEN_MIN;
+  for(const c of chicks){ const p=chickXY(c);
+    if(Math.hypot(x-p.x,y-p.y) < 34*c.sc){ const op=chickOpenNow(c); if(op>bo){bo=op;best=c;} } }
+  return best;
+}
+function startNest(){
+  phase='nest';
+  nestTimer=NEST_ROUND; nestRamp=0; nestFed=0; bestNestCombo=0; combo=0; nestWarned=false; nestEnded=false;
+  for(const c of chicks){ c.full=0.12; c.fed=0; c.gulp=0; }
+  ecount.textContent='0';
+  timerbar.style.display='block'; timerfill.style.width='100%';
+  promptEl.textContent='Scoop a worm, drop it in an open beak!'; promptEl.style.opacity=1;
+  blip(523,0.12,'sine',0.14); blip(659,0.12,'sine',0.12);
+  track('start',{level:'nest',returning:!NUZZ_AID.fresh});
+}
+function nestGrab(p){            // scoop a worm from the patch along the bottom
+  if(nestCarry) return;
+  if(p.y < H*WORM_ZONE){ floater(p.x,p.y-18,'grab a worm below!','#fff'); return; }
+  nestCarry={x:p.x,y:p.y,pid:p.id};
+  blip(300,0.06,'sine',0.10);
+}
+function nestDrag(p){ if(nestCarry && p.id===nestCarry.pid){ nestCarry.x=p.x; nestCarry.y=p.y; } }
+function nestRelease(){
+  if(!nestCarry) return;
+  const x=nestCarry.x, y=nestCarry.y; const c=chickAt(x,y); nestCarry=null;
+  if(c) feedChick(c); else wasteWorm(x,y);
+}
+function feedChick(c){
+  const p=chickXY(c);
+  c.full=Math.min(1,c.full+FEED_AMOUNT); c.gulp=1; c.fed++;
+  nestFed++; ecount.textContent=nestFed;
+  combo++; comboTimer=90; bestNestCombo=Math.max(bestNestCombo,combo);
+  comboEl.textContent='YUM ×'+combo; comboEl.style.opacity=combo>1?1:0;
+  burst(p.x,p.y-6,4,'heart'); floater(p.x,p.y-34,'+1','#fff');
+  blip(600+Math.min(combo,14)*20,0.09,'sine',0.13);
+  if(c.full>=1){ floater(p.x,p.y-50,'FULL & HAPPY!','#ffd95e'); burst(p.x,p.y-6,7,'spark'); blip(900,0.12,'triangle',0.12); }
+  shake=3;
+}
+function wasteWorm(x,y){
+  blip(150,0.10,'square',0.07); burst(x,y,3,'dirt');
+  floater(x,y-18,'missed!','#ff8fa3'); combo=0; comboEl.style.opacity=0;
+}
+function updateNest(){
+  if(nestTimer<=0) return;
+  nestTimer--;
+  nestRamp = 1 - nestTimer/NEST_ROUND;
+  timerfill.style.width=Math.max(0,nestTimer/NEST_ROUND*100)+'%';
+  for(const c of chicks){ if(c.gulp>0)c.gulp-=0.05; c.full=Math.max(0,c.full-NEST_DECAY); }
+  if(!nestWarned && nestTimer<NEST_ROUND*0.2){
+    nestWarned=true; promptEl.textContent='Mama bird is heading home — top them off!';
+  }
+  if(nestTimer<=0) endNestRound();
+}
+function endNestRound(){
+  nestAvg = chicks.reduce((s,c)=>s+c.full,0)/chicks.length;
+  nestHappy = chicks.filter(c=>c.full>=0.8).length;
+  nestVerdict = nestAvg>=0.8?'gold':(nestAvg>=0.58?'silver':(nestAvg>=0.34?'bronze':'angry'));
+  phase='nestMom'; momT=0; nestCarry=null; nestEnded=false;
+  timerbar.style.display='none'; promptEl.style.opacity=0;
+  if(nestVerdict==='angry') sadTrombone(); else { blip(523,0.14,'sine',0.14); blip(784,0.16,'sine',0.13); }
+}
+function updateNestMom(){
+  momT++;
+  if(nestVerdict==='angry' && momT===30){ shake=14; sadTrombone(); }
+  if(momT>120 && !nestEnded) showNestEnd();
+}
+function showNestEnd(){
+  const eyebrow=document.querySelector('#endcard .eyebrow');
+  const head=document.querySelector('.bagshelf .head');
+  const lastP=document.querySelector('#endcard p:last-of-type');
+  let eb,title,blurb,stamp,last;
+  if(nestVerdict==='gold'){
+    eb='The whole nest is full!'; title='🐦 Mama’s Overjoyed!';
+    blurb="Mama swoops home to a nest of fat, sleepy chicks and gives you the happiest little trill. You did so good.";
+    stamp='★ WHOLE NEST FED ★'; last="Come back tomorrow — there’s always another hungry beak.";
+  } else if(nestVerdict==='silver'){
+    eb='A well-fed nest'; title='🐦 Thanks for Sitting!';
+    blurb="Most of the chicks are full and content. Mama lands, ruffles your feathers fondly, and takes over from here.";
+    stamp='★ GOOD SITTER ★'; last="So close to a perfect nest — go again?";
+  } else if(nestVerdict==='bronze'){
+    eb='Still a bit peckish'; title='🐦 A Few Still Hungry…';
+    blurb="Mama’s home, but some little ones are still cheeping for more. Not bad — they could just use fuller bellies.";
+    stamp='★ ROOM TO GROW ★'; last="Keep more beaks topped off next time!";
+  } else {
+    eb='Uh oh…'; title='😤 Mama’s FURIOUS!';
+    blurb="Mama comes back to a nest of starving, wailing chicks — and dive-bombs YOU for it. (You had ONE job!)";
+    stamp='★ FLAP HARDER NEXT TIME ★'; last="Shake it off and try again — those beaks won’t fill themselves.";
+  }
+  eyebrow.textContent=eb; eyebrow.style.color='#fff';
+  endTitle.textContent=title; endBlurb.textContent=blurb;
+  head.textContent='Nest report';
+  bagList.textContent='Fed '+nestFed+' worms · '+nestHappy+'/'+NEST_CHICKS+' chicks full · best combo ×'+bestNestCombo;
+  document.getElementById('stamp').textContent=stamp;
+  lastP.textContent=last;
+  track('run_end',{level:'nest',result:nestVerdict,reached:nestHappy,banked:nestFed,
+    fullness:Math.round(nestAvg*100),combo:bestNestCombo});
+  nestEnded=true;
+  endcard.style.display='flex';
+}
+function resetNest(){
+  endcard.style.display='none'; phase='nestIntro';
+  nestCarry=null; combo=0; comboEl.style.opacity=0; nestWarned=false; nestEnded=false;
+  for(const c of chicks){ c.full=0.12; c.fed=0; c.gulp=0; }
+  ecount.textContent='0'; timerbar.style.display='none';
+  promptEl.textContent='Tap to start — then drag worms up into the open beaks!'; promptEl.style.opacity=1;
+}
+
+/* ---------- bird level: drawing ---------- */
+function drawNestScene(){
+  drawSky();
+  const nx=W/2, ny=H*0.56, nw=Math.min(W*0.86,420);
+  drawBranch(ny+46, nw);
+  drawNestBowl(nx,ny,nw,false);
+  chicks.slice().sort((a,b)=>chickXY(a).y - chickXY(b).y).forEach(drawChick);
+  drawNestBowl(nx,ny,nw,true);
+  drawWormPatch();
+}
+function drawBranch(y,w){
+  ctx.save(); ctx.fillStyle='#7a5320'; ctx.strokeStyle='#5e3f16'; ctx.lineWidth=3; ctx.lineJoin='round';
+  ctx.beginPath(); ctx.roundRect(W/2-w/2-26,y, w+52, 18, 9); ctx.fill(); ctx.stroke();
+  ctx.fillStyle='#7fc06a';
+  for(const lx of [W/2-w/2-12, W/2+w/2+10]){
+    ctx.beginPath(); ctx.ellipse(lx,y+6,17,9,lx<W/2?0.5:-0.5,0,7); ctx.fill(); ctx.stroke(); }
+  ctx.restore();
+}
+function drawNestBowl(nx,ny,nw,front){
+  const nh=64, rx=nw/2;
+  ctx.save(); ctx.lineJoin='round';
+  if(!front){
+    ctx.fillStyle='#a9742f'; ctx.strokeStyle='#7a5320'; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.ellipse(nx,ny+12,rx,nh,0,0,7); ctx.fill(); ctx.stroke();
+    // woven strokes, clipped to the bowl
+    ctx.save();
+    ctx.beginPath(); ctx.ellipse(nx,ny+12,rx,nh,0,0,7); ctx.clip();
+    ctx.strokeStyle='rgba(122,83,32,.5)'; ctx.lineWidth=3;
+    for(let r=0;r<5;r++){ const yy=ny+6+r*13; ctx.beginPath();
+      for(let x=-rx;x<=rx;x+=14){ const yo=Math.sin((x+r*34)*0.05)*3; if(x===-rx)ctx.moveTo(nx+x,yy+yo); else ctx.lineTo(nx+x,yy+yo);} ctx.stroke(); }
+    ctx.restore();
+    // hollow opening the chicks sit in
+    ctx.fillStyle='#caa05f'; ctx.beginPath(); ctx.ellipse(nx,ny-6,rx-12,nh*0.5,0,0,7); ctx.fill();
+    ctx.fillStyle='#5a3f1c'; ctx.beginPath(); ctx.ellipse(nx,ny-2,rx-26,nh*0.34,0,0,7); ctx.fill();
+  } else {
+    // front rim arc, drawn OVER the chicks' bellies to tuck them in
+    ctx.strokeStyle='#a9742f'; ctx.lineWidth=15; ctx.lineCap='round';
+    ctx.beginPath(); ctx.ellipse(nx,ny+8,rx-6,nh*0.82,0,0.18*Math.PI,0.82*Math.PI); ctx.stroke();
+    ctx.strokeStyle='rgba(122,83,32,.6)'; ctx.lineWidth=2.5;
+    ctx.beginPath(); ctx.ellipse(nx,ny+8,rx-6,nh*0.82,0,0.18*Math.PI,0.82*Math.PI); ctx.stroke();
+    ctx.lineCap='butt';
+  }
+  ctx.restore();
+}
+function drawChick(c){
+  const p=chickXY(c), s=c.sc*(c.gulp>0?1+c.gulp*0.12:1), op=chickOpenNow(c), content=c.full>=0.85;
+  ctx.save(); ctx.translate(p.x,p.y); ctx.scale(s,s);
+  ctx.lineWidth=3; ctx.strokeStyle='#3a4a5a'; ctx.lineJoin='round';
+  const body=content?'#ffe39a':'#ffd86a';
+  ctx.fillStyle=body; ctx.beginPath(); ctx.ellipse(0,6,17,16,0,0,7); ctx.fill(); ctx.stroke();
+  ctx.fillStyle='#fff6d8'; ctx.beginPath(); ctx.ellipse(0,10,9,10,0,0,7); ctx.fill();
+  ctx.fillStyle=content?'#f4c95a':'#f0b840';
+  ctx.beginPath(); ctx.ellipse(-15,4,5,8,0.3,0,7); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.ellipse(15,4,5,8,-0.3,0,7); ctx.fill(); ctx.stroke();
+  ctx.fillStyle=body; ctx.beginPath(); ctx.arc(0,-12,12,0,7); ctx.fill(); ctx.stroke();
+  ctx.strokeStyle='#3a4a5a'; ctx.lineWidth=2.5;
+  ctx.beginPath(); ctx.moveTo(0,-23); ctx.lineTo(-3,-30); ctx.moveTo(0,-23); ctx.lineTo(3,-30); ctx.stroke();
+  ctx.lineWidth=3;
+  if(content){
+    ctx.strokeStyle='#3a4a5a'; ctx.lineWidth=2.4;
+    ctx.beginPath(); ctx.arc(-5,-13,3,0.1*Math.PI,0.9*Math.PI); ctx.stroke();
+    ctx.beginPath(); ctx.arc(5,-13,3,0.1*Math.PI,0.9*Math.PI); ctx.stroke();
+  } else if(((t+c.blink)%200)<8){
+    ctx.strokeStyle='#3a4a5a'; ctx.lineWidth=2.2;
+    ctx.beginPath(); ctx.moveTo(-7,-14); ctx.lineTo(-3,-14); ctx.moveTo(3,-14); ctx.lineTo(7,-14); ctx.stroke();
+  } else {
+    ctx.fillStyle='#3a4a5a';
+    ctx.beginPath(); ctx.arc(-5,-14,2.6,0,7); ctx.fill(); ctx.beginPath(); ctx.arc(5,-14,2.6,0,7); ctx.fill();
+    ctx.fillStyle='#fff';
+    ctx.beginPath(); ctx.arc(-4,-15,0.9,0,7); ctx.fill(); ctx.beginPath(); ctx.arc(6,-15,0.9,0,7); ctx.fill();
+  }
+  const by=-3, gap=content?0:op*8;
+  if(gap>1.5){ ctx.fillStyle='#cf4b2c';
+    ctx.beginPath(); ctx.moveTo(-6,by); ctx.lineTo(6,by); ctx.lineTo(5,by+gap); ctx.lineTo(-5,by+gap); ctx.closePath(); ctx.fill(); }
+  ctx.fillStyle='#f6a73f'; ctx.strokeStyle='#c87d1e'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(-6,by); ctx.lineTo(6,by); ctx.lineTo(0,by-6); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-6,by+gap); ctx.lineTo(6,by+gap); ctx.lineTo(0,by+gap+7); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.textAlign='center'; ctx.lineWidth=3; ctx.strokeStyle='rgba(58,74,90,.45)';
+  if(content){ ctx.fillStyle='#fff'; ctx.font='bold 11px sans-serif';
+    ctx.strokeText('z',13,-22); ctx.fillStyle='#fff'; ctx.fillText('z',13,-22); }
+  else if(c.full<0.4 && op>0.45){ ctx.fillStyle='#fff'; ctx.font='bold 12px sans-serif';
+    ctx.strokeText('♪',14,-20); ctx.fillStyle='#fff'; ctx.fillText('♪',14,-20); }
+  ctx.restore();
+}
+function drawWorm(x,y,sc){
+  ctx.save(); ctx.translate(x,y); ctx.scale(sc,sc);
+  ctx.strokeStyle='#e08aa0'; ctx.lineWidth=6; ctx.lineCap='round'; ctx.lineJoin='round';
+  ctx.beginPath();
+  for(let k=0;k<5;k++){ const xx=(k-2)*6, yy=Math.sin(t*0.3+k*0.8)*3; if(k===0)ctx.moveTo(xx,yy); else ctx.lineTo(xx,yy); }
+  ctx.stroke();
+  ctx.fillStyle='#c96f88'; ctx.beginPath(); ctx.arc(12,Math.sin(t*0.3+3.2)*3,3.2,0,7); ctx.fill();
+  ctx.restore();
+}
+function drawCarriedWorm(){ if(nestCarry) drawWorm(nestCarry.x,nestCarry.y,1.35); }
+function drawWormPatch(){
+  ctx.save();
+  const y0=H*0.82;
+  ctx.fillStyle='#6b4a2a'; ctx.beginPath(); ctx.moveTo(0,y0+10);
+  for(let x=0;x<=W;x+=24) ctx.lineTo(x, y0 - 6*Math.sin(x*0.03)); ctx.lineTo(W,H); ctx.lineTo(0,H); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='#7d5732'; ctx.fillRect(0,y0+20,W,H);
+  ctx.strokeStyle='#e08aa0'; ctx.lineWidth=5; ctx.lineCap='round';
+  for(let i=0;i<6;i++){ const wx=(i+0.5)/6*W, ph=i*1.3+t*0.06; ctx.beginPath();
+    for(let k=0;k<4;k++){ const yy=y0+8-k*7, xx=wx+Math.sin(ph+k*0.9)*4; if(k===0)ctx.moveTo(xx,yy); else ctx.lineTo(xx,yy);} ctx.stroke(); }
+  ctx.fillStyle='rgba(255,255,255,.9)'; ctx.font='bold 12px sans-serif'; ctx.textAlign='center';
+  ctx.strokeStyle='rgba(58,74,90,.5)'; ctx.lineWidth=3;
+  ctx.strokeText('↑ scoop a worm from here',W/2,H-10); ctx.fillStyle='#fff'; ctx.fillText('↑ scoop a worm from here',W/2,H-10);
+  ctx.restore();
+}
+function drawMom(){
+  const nx=W/2, ny=H*0.56, nw=Math.min(W*0.86,420), angry=nestVerdict==='angry';
+  let mx,my,flap=Math.sin(momT*0.5);
+  if(angry){ const k=Math.min(1,momT/30); mx=nx; my=-50+(ny-30-(-50))*k; if(momT>30)my=ny-30+Math.sin(momT*0.3)*6; }
+  else { const k=Math.min(1,momT/55), e=1-Math.pow(1-k,2);
+    mx=(W+50)+(nx+nw*0.40-(W+50))*e; my=(-50)+(ny-12-(-50))*e; flap=k<1?Math.sin(momT*0.6):Math.sin(momT*0.12)*0.3; }
+  ctx.save(); ctx.translate(mx,my); ctx.scale(1.5,1.5);
+  ctx.lineWidth=3; ctx.strokeStyle='#3a4a5a'; ctx.lineJoin='round';
+  ctx.fillStyle=angry?'#e0894a':'#f0a85a';
+  ctx.beginPath(); ctx.ellipse(0,2,16,13,0,0,7); ctx.fill(); ctx.stroke();
+  ctx.fillStyle='#d98c3e'; const wa=0.5+flap*0.6;
+  ctx.save(); ctx.translate(-10,-2); ctx.rotate(-wa); ctx.beginPath(); ctx.ellipse(-10,0,14,6,0,0,7); ctx.fill(); ctx.stroke(); ctx.restore();
+  ctx.save(); ctx.translate(10,-2); ctx.rotate(wa); ctx.beginPath(); ctx.ellipse(10,0,14,6,0,0,7); ctx.fill(); ctx.stroke(); ctx.restore();
+  ctx.fillStyle=angry?'#e0894a':'#f0a85a'; ctx.beginPath(); ctx.arc(0,-12,10,0,7); ctx.fill(); ctx.stroke();
+  if(angry){ ctx.strokeStyle='#3a4a5a'; ctx.lineWidth=2.5;
+    ctx.beginPath(); ctx.moveTo(-7,-16); ctx.lineTo(-2,-13); ctx.moveTo(7,-16); ctx.lineTo(2,-13); ctx.stroke(); }
+  else { ctx.fillStyle='#3a4a5a';
+    ctx.beginPath(); ctx.arc(-4,-13,2.4,0,7); ctx.fill(); ctx.beginPath(); ctx.arc(4,-13,2.4,0,7); ctx.fill(); }
+  ctx.fillStyle='#f3a13a'; ctx.strokeStyle='#c87d1e'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(-3,-9); ctx.lineTo(3,-9); ctx.lineTo(0,-3); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.restore();
+  ctx.fillStyle='#fff'; ctx.font='bold 22px sans-serif'; ctx.textAlign='center'; ctx.strokeStyle='rgba(58,74,90,.5)'; ctx.lineWidth=4;
+  const em=angry?'!!':(nestVerdict==='gold'?'♥':'♪');
+  ctx.strokeText(em,mx+(angry?0:22),my-26); ctx.fillStyle='#fff'; ctx.fillText(em,mx+(angry?0:22),my-26);
+}
+function drawNestIntroText(){
+  ctx.fillStyle='#fff'; ctx.textAlign='center'; ctx.strokeStyle='rgba(58,74,90,.5)'; ctx.lineWidth=3;
+  ctx.font='bold 18px sans-serif';
+  ctx.strokeText('Feed the hungry nest!',W/2,H*0.19); ctx.fillStyle='#fff'; ctx.fillText('Feed the hungry nest!',W/2,H*0.19);
+  ctx.font='bold 14px sans-serif'; ctx.strokeStyle='rgba(58,74,90,.5)';
+  ctx.strokeText('Scoop a worm, drop it in an open beak.',W/2,H*0.19+24); ctx.fillStyle='#fff'; ctx.fillText('Scoop a worm, drop it in an open beak.',W/2,H*0.19+24);
+}
+
 /* ---------- main loop ---------- */
 function frame(){
   t++;
@@ -1265,6 +1552,8 @@ function frame(){
 
   if(phase==='walk') updateWalk();
   if(phase==='course') updateCourse();
+  if(phase==='nest') updateNest();
+  if(phase==='nestMom') updateNestMom();
 
   const sx=(Math.random()-0.5)*shake,sy=(Math.random()-0.5)*shake;
   ctx.save();ctx.translate(sx,sy);
@@ -1287,6 +1576,12 @@ function frame(){
   else if(phase==='course'){
     drawCourse();
   }
+  else if(phase==='nestIntro' || phase==='nest' || phase==='nestMom'){
+    drawNestScene();
+    if(phase==='nestIntro') drawNestIntroText();
+    if(phase==='nestMom') drawMom();
+    if(nestCarry) drawCarriedWorm();
+  }
   else if(phase==='walk' || phase==='done'){
     drawTrailScene();
     if(phase==='walk'){
@@ -1300,6 +1595,17 @@ function frame(){
   requestAnimationFrame(frame);
 }
 resize();
+/* ---------- boot the chosen level (?nest launches the bird level) ---------- */
+if(LEVEL==='nest'){
+  phase='nestIntro';
+  buildNest();
+  const eb=document.querySelector('#energybox .eyebrow'); if(eb) eb.textContent='Worms fed';
+  const bone=document.querySelector('#energy .bone'); if(bone) bone.textContent='🐛';
+  ecount.textContent='0';
+  daytagEl.textContent='The Nest';
+  document.querySelector('#endcard .eyebrow').textContent='Nest report';
+  promptEl.textContent='Tap to start — then drag worms up into the open beaks!';
+}
 requestAnimationFrame(frame);
 })();
 </script>
