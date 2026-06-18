@@ -1248,8 +1248,8 @@ function drawCourse(){
    Feed a closed beak and the worm's wasted. Fill their bellies and they settle, content. When
    time's up, Mama bird flies home and reacts to how well you fed the nest (graded, generous-
    tuned so a happy mama is the norm and the angry dive-bomb is a rare, earned punchline). */
-const NEST_CHICKS=6, NEST_ROUND=24*60, FEED_OPEN_MIN=0.22, FEED_AMOUNT=0.34;
-const NEST_RATE0=0.032, NEST_RATE_RAMP=0.03, NEST_DECAY=0.0005, WORM_ZONE=0.78;
+const NEST_CHICKS=6, NEST_ROUND=24*60, FEED_OPEN_MIN=0.18, FEED_AMOUNT=0.34;
+const NEST_RATE0=0.02, NEST_RATE_RAMP=0.018, NEST_DECAY=0.0005, WORM_ZONE=0.78;
 /* Big chicks in an asymmetrical circular cluster (offsets: r=0..1 of cluster radius, a=angle°). */
 const NEST_LAYOUT=[
   {r:0.18,a:210,sc:1.65},{r:1.00,a:-94,sc:1.58},{r:1.04,a:-26,sc:1.80},
@@ -1473,7 +1473,7 @@ function drawWorm(x,y,sc,phase){
   phase=phase||0;
   ctx.save(); ctx.translate(x,y); ctx.scale(sc,sc);
   ctx.lineCap='round'; ctx.lineJoin='round';
-  const pts=[]; for(let k=0;k<5;k++) pts.push([(k-2)*7, Math.sin(t*0.3+phase+k*0.8)*3.4]);
+  const pts=[]; for(let k=0;k<5;k++) pts.push([(k-2)*7, Math.sin(phase+k*0.8)*3.4]);  // static shape (no wiggle)
   const path=()=>{ ctx.beginPath(); pts.forEach((p,k)=>k?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1])); };
   ctx.strokeStyle='#8a4257'; ctx.lineWidth=10; path(); ctx.stroke();   // dark outline = visible on any bg
   ctx.strokeStyle='#f2a0b6'; ctx.lineWidth=6.5; path(); ctx.stroke();  // plump pink body
