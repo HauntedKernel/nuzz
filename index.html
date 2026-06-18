@@ -140,7 +140,8 @@ function track(ev,props){try{
 /* ---------- state ---------- */
 /* phases: intro -> bond -> walk -> done.  walk has its own sub-stages (walkStage).
    The bird level (LEVEL='nest', via ?nest) uses its own phases: nestIntro -> nest -> nestMom -> done. */
-const LEVEL = location.search.indexOf('dog')!==-1 ? 'dog' : 'nest';   // nest is the landing level now; dog via ?dog
+const LEVEL = location.search.indexOf('dog')!==-1 ? 'dog'
+            : (location.search.indexOf('panda')!==-1 ? 'panda' : 'nest');   // nest = landing; ?dog / ?panda for the others
 let phase='intro';
 let energy=0;
 let combo=0, comboTimer=0;
@@ -827,6 +828,8 @@ function handleDown(e){
     if(phase==='intro'){startRound();return;}
     if(phase==='nestIntro'){startNest();return;}
     if(phase==='nest') nestGrab(p);
+    if(phase==='pandaIntro'){startPanda();return;}
+    if(phase==='panda') pandaGrab(p);
     if(phase==='bond')petAt(p.x,p.y,p.id);
     if(phase==='course') coursePress();
     if(phase==='walk' && walkStage==='scene') tapInvestigation(p.x,p.y);
@@ -838,12 +841,18 @@ function handleMove(e){
     touches[p.id]=p;
     if(phase==='bond')petAt(p.x,p.y,p.id);
     if(phase==='nest') nestDrag(p);
+    if(phase==='panda') pandaDrag(p);
   }
 }
 function handleUp(e){
   if(phase==='nest' && nestCarry){
     const stillDown = e.touches ? Array.from(e.touches).some(tc=>tc.identifier===nestCarry.pid) : false;
     if(!stillDown) nestRelease();
+  }
+  if(phase==='panda'){
+    if(e.touches){ const ids=new Set(Array.from(e.touches).map(tc=>tc.identifier));
+      for(const c of pandas) if(c.heldBy!=null && c.heldBy!=='mouse' && !ids.has(c.heldBy)) pandaRelease(c);
+    } else { for(const c of pandas) if(c.heldBy==='mouse') pandaRelease(c); }
   }
   if(e.touches){
     const ids=new Set(Array.from(e.touches).map(tc=>tc.identifier));
@@ -886,6 +895,7 @@ function beginWalk(){
 }
 document.getElementById('replay').addEventListener('click',()=>{
   if(LEVEL==='nest'){ resetNest(); return; }
+  if(LEVEL==='panda'){ resetPanda(); return; }
   phase='intro';setEnergy(0);combo=0;dogHappy=0;
   trailScroll=0;
   bag.length=0;
@@ -1547,6 +1557,188 @@ function drawNestIntroText(){
   ctx.strokeText('Scoop a worm, drop it in an open beak.',W/2,H*0.19+24); ctx.fillStyle='#fff'; ctx.fillText('Scoop a worm, drop it in an open beak.',W/2,H*0.19+24);
 }
 
+/* ===================== PANDA LEVEL — "Falling Pandas" (launch with ?panda) =====================
+   Comically clumsy pandas slide/tumble down a hill toward a cliff at the bottom-right. DRAG them
+   (multi-touch — pin one while you grab others) up to the SAFE PEN at the top-left. A panda that
+   reaches the cliff harmlessly tumbles off into the hay (no injury — keep it kind) and the zookeeper
+   has to fetch it. Time-boxed round; the zookeeper reacts at the end, graded by how many escaped. */
+const PANDA_ROUND=28*60, PANDA_START=4, PANDA_MAX=11, PANDA_SPAWN=150;
+const PANDA_GRAB=46, DANGER_Y=0.88, PEN_X=0.34, PEN_Y=0.30, PANDA_DIR={x:0.41,y:0.91};
+let pandas=[], pandaTimer=0, pandaRamp=0, pandaSafe=0, pandaEscaped=0, pandaSpawnT=0, pandaSpawned=0;
+let pandaWarned=false, zooT=0, pandaVerdict='silver', pandaEnded=false;
+
+function spawnPanda(){
+  pandas.push({ x:W*(0.40+Math.random()*0.45), y:H*(0.22+Math.random()*0.18),
+    ang:0, vr:0, state:'slide', spd:0.7, stT:40+Math.random()*40,
+    heldBy:null, safe:false, wob:Math.random()*6 });
+  pandaSpawned++;
+}
+function startPanda(){
+  phase='panda'; pandaTimer=PANDA_ROUND; pandaRamp=0; pandaSafe=0; pandaEscaped=0;
+  pandaSpawnT=PANDA_SPAWN; pandaSpawned=0; pandaWarned=false; pandaEnded=false;
+  pandas=[]; for(let i=0;i<PANDA_START;i++) spawnPanda();
+  ecount.textContent='0';
+  timerbar.style.display='block'; timerfill.style.width='100%';
+  promptEl.textContent='Drag the clumsy pandas up to the safe pen!'; promptEl.style.opacity=1;
+  blip(330,0.12,'sine',0.14); blip(440,0.12,'sine',0.12);
+  track('start',{level:'panda',returning:!NUZZ_AID.fresh});
+}
+function pandaSetState(c,st){
+  c.state=st;
+  if(st==='rest'){ c.spd=0; c.stT=24+Math.random()*40; c.vr*=0.3; }
+  else if(st==='slide'){ c.spd=0.55+Math.random()*0.6; c.stT=44+Math.random()*60; c.vr=(Math.random()-0.5)*0.06; }
+  else { c.state='tumble'; c.spd=2.3+Math.random()*1.6; c.stT=26+Math.random()*40; c.vr=(Math.random()-0.5)*0.5; }
+}
+function pandaNextState(c){
+  const r=Math.random();
+  if(c.state==='tumble') pandaSetState(c, r<0.7?'slide':'rest');
+  else if(c.state==='slide') pandaSetState(c, r<0.40?'tumble':(r<0.65?'rest':'slide'));
+  else pandaSetState(c, r<0.82?'slide':'tumble');   // rest -> mostly slide
+}
+function updatePandaLevel(){
+  if(pandaTimer<=0) return;
+  pandaTimer--; pandaRamp=1-pandaTimer/PANDA_ROUND;
+  timerfill.style.width=Math.max(0,pandaTimer/PANDA_ROUND*100)+'%';
+  if(pandas.length<PANDA_MAX){ pandaSpawnT--; if(pandaSpawnT<=0){ spawnPanda(); pandaSpawnT=Math.max(55,PANDA_SPAWN-pandaRamp*75); } }
+  const speed=1+pandaRamp*0.7;
+  for(let i=pandas.length-1;i>=0;i--){
+    const c=pandas[i];
+    if(c.heldBy!=null || c.safe) continue;
+    c.stT--; if(c.stT<=0) pandaNextState(c);
+    const wob = c.state==='tumble' ? Math.sin(t*0.5+c.wob)*0.8 : Math.sin(t*0.1+c.wob)*0.2;
+    c.x += PANDA_DIR.x*c.spd*speed + wob;
+    c.y += PANDA_DIR.y*c.spd*speed;
+    c.ang += c.vr*(c.state==='tumble'?1:0.3);
+    if(c.y>H*DANGER_Y || c.x>W*0.97){ pandas.splice(i,1); pandaEscaped++; shake=8; sadTrombone();
+      floater(Math.min(c.x,W-30), H*DANGER_Y-12, 'escaped!', '#ff8fa3'); }
+  }
+  if(!pandaWarned && pandaTimer<PANDA_ROUND*0.18){ pandaWarned=true; promptEl.textContent='Almost shift change — keep them off the bottom!'; }
+  if(pandaTimer<=0) endPandaRound();
+}
+function pandaGrab(p){
+  let best=null,bd=PANDA_GRAB*PANDA_GRAB;
+  for(const c of pandas){ if(c.safe||c.heldBy!=null) continue;
+    const dx=p.x-c.x, dy=p.y-c.y, d=dx*dx+dy*dy; if(d<bd){bd=d;best=c;} }
+  if(best){ best.heldBy=p.id; best.state='held'; best.vr*=0.2; blip(420,0.05,'sine',0.10); }
+}
+function pandaDrag(p){ for(const c of pandas){ if(c.heldBy===p.id){ c.x=p.x; c.y=p.y; return; } } }
+function pandaRelease(c){
+  c.heldBy=null;
+  if(c.x<W*PEN_X && c.y<H*PEN_Y){
+    c.safe=true; c.state='safe'; c.ang=0; c.vr=0; pandaSafe++; ecount.textContent=pandaSafe;
+    burst(c.x,c.y,5,'heart'); blip(720,0.10,'sine',0.13);
+  } else pandaSetState(c,'rest');
+}
+function endPandaRound(){
+  pandaVerdict = pandaEscaped<=1?'gold':(pandaEscaped<=4?'silver':(pandaEscaped<=8?'bronze':'oops'));
+  phase='pandaEnd'; zooT=0; pandaEnded=false;
+  timerbar.style.display='none'; promptEl.style.opacity=0;
+  if(pandaVerdict==='oops') sadTrombone(); else { blip(523,0.14,'sine',0.14); blip(784,0.16,'sine',0.13); }
+}
+function updateZoo(){ zooT++; if(zooT>120 && !pandaEnded) showPandaEnd(); }
+function showPandaEnd(){
+  const eyebrow=document.querySelector('#endcard .eyebrow');
+  const head=document.querySelector('.bagshelf .head');
+  const lastP=document.querySelector('#endcard p:last-of-type');
+  let eb,title,blurb,stamp,last;
+  if(pandaVerdict==='gold'){ eb='Not one panda lost!'; title='🐼 Zookeeper of the Year!';
+    blurb="You kept the whole tumbling, sliding, deeply unintelligent bunch up on the hill. The zookeeper is speechless with gratitude.";
+    stamp='★ FULL HILL · NO ESCAPES ★'; last="Come back tomorrow — they will not have learned a thing."; }
+  else if(pandaVerdict==='silver'){ eb='A couple got away'; title='🐼 Solid Shift!';
+    blurb="A few pandas bumbled off into the haystacks, but the zookeeper nods — that's a good day on Panda Hill.";
+    stamp='★ GOOD WRANGLING ★'; last="So close to a clean sheet — go again?"; }
+  else if(pandaVerdict==='bronze'){ eb='Bit of a tumble'; title='🐼 Chaotic Good';
+    blurb="Pandas everywhere. The zookeeper is sweating but still smiling. They're all (probably) fine.";
+    stamp='★ HANDS FULL ★'; last="Tighten up the juggling next round!"; }
+  else { eb='Total panda-monium'; title='😵 Zookeeper Buried!';
+    blurb="So many pandas tumbled off that the zookeeper is now physically under a pile of them. Nobody is hurt. Everybody is dumb.";
+    stamp='★ PANDA-MONIUM ★'; last="Shake it off — the hill needs you."; }
+  eyebrow.textContent=eb; eyebrow.style.color='#fff';
+  endTitle.textContent=title; endBlurb.textContent=blurb;
+  head.textContent='Shift report';
+  bagList.textContent='Pandas saved '+pandaSafe+' · escaped '+pandaEscaped+' · still on the hill '+pandas.filter(p=>!p.safe).length;
+  document.getElementById('stamp').textContent=stamp;
+  lastP.textContent=last;
+  track('run_end',{level:'panda',result:pandaVerdict,reached:pandaSafe,banked:pandaEscaped,combo:0});
+  pandaEnded=true; endcard.style.display='flex';
+}
+function resetPanda(){
+  endcard.style.display='none'; phase='pandaIntro';
+  pandas=[]; for(let i=0;i<4;i++) spawnPanda();
+  pandaSafe=0; pandaEscaped=0; pandaEnded=false; ecount.textContent='0';
+  timerbar.style.display='none';
+  promptEl.textContent='Tap to start — drag the clumsy pandas up to the safe pen!'; promptEl.style.opacity=1;
+}
+
+/* ---------- panda level: drawing ---------- */
+function drawPandaScene(){
+  drawSky();
+  drawHill();
+  pandas.slice().sort((a,b)=>a.y-b.y).forEach(drawPandaSprite);
+  if(phase==='pandaEnd') drawZoo();
+}
+function drawHill(){
+  ctx.fillStyle='#9ed468';
+  ctx.beginPath(); ctx.moveTo(0,H*0.18); ctx.lineTo(W,H*0.55); ctx.lineTo(W,H); ctx.lineTo(0,H); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle='rgba(122,160,80,.4)'; ctx.lineWidth=2;
+  for(let i=1;i<7;i++){ ctx.beginPath(); ctx.moveTo(0,H*0.18+i*16); ctx.lineTo(W,H*0.55+i*16); ctx.stroke(); }
+  // danger fence + hay at the bottom (the cliff)
+  ctx.fillStyle='#caa46a'; ctx.fillRect(0,H*0.88,W,H*0.12);
+  ctx.fillStyle='#b8923f';
+  for(let x=0;x<W;x+=40){ ctx.beginPath(); ctx.moveTo(x,H*0.90); ctx.lineTo(x+14,H*0.96); ctx.lineTo(x-14,H*0.96); ctx.closePath(); ctx.fill(); }
+  ctx.strokeStyle='#7a5320'; ctx.lineWidth=4; ctx.beginPath(); ctx.moveTo(0,H*0.88); ctx.lineTo(W,H*0.88); ctx.stroke();
+  // safe pen (top-left)
+  ctx.fillStyle='rgba(255,248,236,.5)'; ctx.fillRect(0,0,W*PEN_X,H*PEN_Y);
+  ctx.strokeStyle='#caa05f'; ctx.lineWidth=4; ctx.strokeRect(3,3,W*PEN_X-6,H*PEN_Y-6);
+  ctx.fillStyle='rgba(58,74,90,.6)'; ctx.font='bold 12px sans-serif'; ctx.textAlign='center';
+  ctx.fillText('🐼 SAFE PEN',W*PEN_X/2,H*PEN_Y-9);
+}
+function drawPandaSprite(c){
+  ctx.save(); ctx.translate(c.x,c.y); ctx.rotate(c.ang); ctx.scale(c.heldBy!=null?1.1:1,c.heldBy!=null?1.1:1);
+  ctx.lineWidth=3; ctx.strokeStyle='#3a4a5a'; ctx.lineJoin='round';
+  ctx.fillStyle='#2a2a30';
+  for(const a of [[-10,12],[10,12],[-13,0],[13,0]]){ ctx.beginPath(); ctx.ellipse(a[0],a[1],5,7,0,0,7); ctx.fill(); }
+  ctx.fillStyle='#fff'; ctx.beginPath(); ctx.ellipse(0,2,15,14,0,0,7); ctx.fill(); ctx.stroke();
+  ctx.fillStyle='#2a2a30'; ctx.beginPath(); ctx.arc(-11,-12,5,0,7); ctx.fill(); ctx.beginPath(); ctx.arc(11,-12,5,0,7); ctx.fill();
+  ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(0,-6,11,0,7); ctx.fill(); ctx.stroke();
+  ctx.fillStyle='#2a2a30';
+  ctx.beginPath(); ctx.ellipse(-4,-7,3,4,-0.3,0,7); ctx.fill(); ctx.beginPath(); ctx.ellipse(4,-7,3,4,0.3,0,7); ctx.fill();
+  if(c.safe){ ctx.strokeStyle='#fff'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(-5,-7); ctx.lineTo(-3,-7); ctx.moveTo(3,-7); ctx.lineTo(5,-7); ctx.stroke(); }
+  else if(c.state==='tumble'){ ctx.fillStyle='#fff'; ctx.font='bold 7px sans-serif'; ctx.textAlign='center';
+    ctx.fillText('@',-4,-5); ctx.fillText('@',4,-5); }   // dizzy eyes while tumbling
+  else { ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(-4,-7,1.3,0,7); ctx.fill(); ctx.beginPath(); ctx.arc(4,-7,1.3,0,7); ctx.fill(); }
+  ctx.fillStyle='#2a2a30'; ctx.beginPath(); ctx.arc(0,-3,1.6,0,7); ctx.fill();
+  ctx.restore();
+  if(c.safe){ ctx.fillStyle='#fff'; ctx.font='bold 11px sans-serif'; ctx.textAlign='center';
+    ctx.strokeStyle='rgba(58,74,90,.4)'; ctx.lineWidth=3; ctx.strokeText('z',c.x+14,c.y-16); ctx.fillStyle='#fff'; ctx.fillText('z',c.x+14,c.y-16); }
+}
+function drawZoo(){
+  const angry=pandaVerdict==='oops';
+  const k=Math.min(1,zooT/40), e=1-Math.pow(1-k,2);
+  const zx=(-60)+(W*0.5-(-60))*e, zy=H*0.66;
+  ctx.save(); ctx.translate(zx,zy); ctx.scale(1.7,1.7);
+  ctx.lineWidth=3; ctx.strokeStyle='#3a4a5a'; ctx.lineJoin='round';
+  ctx.fillStyle='#6a8f5a'; ctx.beginPath(); ctx.roundRect(-12,-6,24,30,8); ctx.fill(); ctx.stroke();
+  ctx.fillStyle='#f0c9a0'; ctx.beginPath(); ctx.arc(0,-16,11,0,7); ctx.fill(); ctx.stroke();
+  ctx.fillStyle='#caa05f'; ctx.beginPath(); ctx.ellipse(0,-24,14,4,0,0,7); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.roundRect(-8,-33,16,10,3); ctx.fill(); ctx.stroke();
+  ctx.strokeStyle='#3a4a5a'; ctx.fillStyle='#3a4a5a';
+  if(angry){ ctx.lineWidth=2.4; ctx.beginPath(); ctx.moveTo(-6,-18); ctx.lineTo(-2,-15); ctx.moveTo(6,-18); ctx.lineTo(2,-15); ctx.stroke(); }
+  else { ctx.beginPath(); ctx.arc(-4,-16,1.7,0,7); ctx.fill(); ctx.beginPath(); ctx.arc(4,-16,1.7,0,7); ctx.fill(); }
+  ctx.restore();
+  ctx.fillStyle='#fff'; ctx.font='bold 22px sans-serif'; ctx.textAlign='center'; ctx.strokeStyle='rgba(58,74,90,.5)'; ctx.lineWidth=4;
+  const em=angry?'!?':(pandaVerdict==='gold'?'♥':'☺');
+  ctx.strokeText(em,zx+22,zy-46); ctx.fillStyle='#fff'; ctx.fillText(em,zx+22,zy-46);
+}
+function drawPandaIntroText(){
+  ctx.fillStyle='#fff'; ctx.textAlign='center'; ctx.strokeStyle='rgba(58,74,90,.5)'; ctx.lineWidth=3;
+  ctx.font='bold 18px sans-serif';
+  ctx.strokeText('Falling Pandas',W/2,H*0.46); ctx.fillStyle='#fff'; ctx.fillText('Falling Pandas',W/2,H*0.46);
+  ctx.font='bold 14px sans-serif'; ctx.strokeStyle='rgba(58,74,90,.5)';
+  ctx.strokeText('Drag the clumsy pandas up to the safe pen.',W/2,H*0.46+24); ctx.fillStyle='#fff'; ctx.fillText('Drag the clumsy pandas up to the safe pen.',W/2,H*0.46+24);
+}
+
 /* ---------- main loop ---------- */
 function frame(){
   t++;
@@ -1583,6 +1775,8 @@ function frame(){
   if(phase==='course') updateCourse();
   if(phase==='nest') updateNest();
   if(phase==='nestMom') updateNestMom();
+  if(phase==='panda') updatePandaLevel();
+  if(phase==='pandaEnd') updateZoo();
 
   const sx=(Math.random()-0.5)*shake,sy=(Math.random()-0.5)*shake;
   ctx.save();ctx.translate(sx,sy);
@@ -1611,6 +1805,10 @@ function frame(){
     if(phase==='nestMom') drawMom();
     if(nestCarry) drawCarriedWorm();
   }
+  else if(phase==='pandaIntro' || phase==='panda' || phase==='pandaEnd'){
+    drawPandaScene();
+    if(phase==='pandaIntro') drawPandaIntroText();
+  }
   else if(phase==='walk' || phase==='done'){
     drawTrailScene();
     if(phase==='walk'){
@@ -1624,7 +1822,8 @@ function frame(){
   requestAnimationFrame(frame);
 }
 resize();
-/* ---------- boot the chosen level (nest is the landing; ?dog = the agility course) ---------- */
+/* ---------- boot the chosen level (nest = landing; ?dog / ?panda for the others) ----------
+   Cross-link cycles through all three so players can discover them: nest → dog → panda → nest. */
 const crosslink=document.getElementById('crosslink');
 if(LEVEL==='nest'){
   phase='nestIntro';
@@ -1636,8 +1835,18 @@ if(LEVEL==='nest'){
   document.querySelector('#endcard .eyebrow').textContent='Nest report';
   promptEl.textContent='Tap to start — then drag worms up into the open beaks!';
   crosslink.textContent='🐶 Play the agility course →'; crosslink.href='?dog';
-} else {
+} else if(LEVEL==='panda'){
+  phase='pandaIntro';
+  for(let i=0;i<4;i++) spawnPanda();   // a few idle pandas on the hill for the intro
+  const eb=document.querySelector('#energybox .eyebrow'); if(eb) eb.textContent='Pandas safe';
+  const bone=document.querySelector('#energy .bone'); if(bone) bone.textContent='🐼';
+  ecount.textContent='0';
+  daytagEl.textContent='Panda Hill';
+  document.querySelector('#endcard .eyebrow').textContent='Shift report';
+  promptEl.textContent='Tap to start — drag the clumsy pandas up to the safe pen!';
   crosslink.textContent='🐦 Play Feed the Nest →'; crosslink.href='?nest';
+} else {
+  crosslink.textContent='🐼 Play Falling Pandas →'; crosslink.href='?panda';
 }
 requestAnimationFrame(frame);
 })();
