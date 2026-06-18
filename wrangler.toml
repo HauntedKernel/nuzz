@@ -1,0 +1,9 @@
+name = "good-boy"
+compatibility_date = "2025-01-01"
+pages_build_output_dir = "public"
+
+# Anonymous gameplay analytics sink (see functions/api/e.js). No PII; random client id.
+[[d1_databases]]
+binding = "DB"
+database_name = "nuzz_analytics"
+database_id = "006e8fb1-bdd4-45c1-be52-25270b567fa0"

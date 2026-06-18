@@ -61,8 +61,10 @@ The repo root is the source of truth; `public/` is what actually deploys. To pus
 3. Sync into `public/`: copy `index.html`, `manifest.json`, `sw.js`, and `icons/*`.
 4. Deploy:
    ```
-   npx wrangler pages deploy public --project-name good-boy --commit-dirty=true --branch=main
+   npx wrangler pages deploy --project-name good-boy --commit-dirty=true --branch=main
    ```
+   (No `public` positional anymore — `wrangler.toml` sets `pages_build_output_dir = "public"`.
+   That same `wrangler.toml` also attaches the D1 analytics binding and compiles `functions/`.)
 
 The service worker (`sw.js`) uses **stale-while-revalidate**: repeat visits paint instantly from
 cache and the new version is fetched in the background, so updates appear on the next reload with
@@ -144,6 +146,44 @@ In the `<style>` section at the top:
 
 ---
 
+## GAMEPLAY ANALYTICS (anonymous, privacy-first)
+
+Added 2026-06-17 so we can see *gameplay*, not just Cloudflare page views. No third party, no
+accounts, no PII — a random `nuzz:aid` in localStorage and server-derived country only.
+
+**How it flows:** `track(ev, props)` in `index.html` fires `navigator.sendBeacon('/api/e', …)` at
+three moments → the Pages Function `functions/api/e.js` inserts one row into the **D1** database
+`nuzz_analytics` (binding `DB`, declared in `wrangler.toml`). A failed beacon can never affect play
+(everything is wrapped in try/catch; the endpoint always returns 204).
+
+**The three events** (one row each):
+- **`start`** — cuddle round begins (a real *play*). `{returning}` = has this browser played before.
+- **`course`** — agility course begins. `{banked, need}` = stamina carried in vs. a full run's cost.
+- **`run_end`** — finish or fail. `{result:'finish'|'fail', reached, grade, cleared, perfects, combo, left}`.
+  `reached` = how many hurdles she got past — **this is the drop-off signal.**
+
+Promoted (indexed) columns: `ev, reached, result, banked, country, ts`. Everything is also kept as
+raw JSON in `data`.
+
+**Reading the numbers** (same auth as DEPLOY — wrangler is logged in):
+```
+# plays / courses / finishes-fails per day
+npx wrangler d1 execute nuzz_analytics --remote --command \
+ "SELECT date(ts/1000,'unixepoch') d, ev, count(*) n FROM events GROUP BY d, ev ORDER BY d;"
+
+# where do FAILS happen? (drop-off histogram by hurdle, 14 = finished)
+npx wrangler d1 execute nuzz_analytics --remote --command \
+ "SELECT reached, count(*) fails FROM events WHERE ev='run_end' AND result='fail' GROUP BY reached ORDER BY reached;"
+
+# fail rate + banked-stamina distribution
+npx wrangler d1 execute nuzz_analytics --remote --command \
+ "SELECT result, count(*) n, round(avg(banked)) avg_banked FROM events WHERE ev='run_end' GROUP BY result;"
+```
+Schema lives in `tools/schema.sql`. To wipe and start over: `DELETE FROM events;`. The whole thing
+is on Cloudflare's free tier (D1: 100k writes/day; we use ~3 per play).
+
+---
+
 ## PARKED (in the code, not currently reached)
 
 The original **trail / dig-for-treasure** system is still in the file (the `walk` phase, `TIER_*`
@@ -206,4 +246,6 @@ reward for a gold ribbon) or delete if it's in the way.
 | Change the running scene / hurdles art | `drawCourse()` / `drawHurdle()` |
 | Edit the landing strip / social links | `#strip` in the HTML |
 | Reset the saved pet/progress | clear `nuzz:pet` / `nuzz:progress` in localStorage |
+| See how people actually play (plays, fail rate, drop-off) | **GAMEPLAY ANALYTICS** above |
+| Add/change a tracked event | `track(...)` calls in `index.html`; sink is `functions/api/e.js` |
 | Deploy a new version | see **DEPLOY** above |

@@ -119,6 +119,18 @@ let W=0,H=0,DPR=Math.min(window.devicePixelRatio||1,2);
 function resize(){const r=cv.getBoundingClientRect();W=r.width;H=r.height;cv.width=W*DPR;cv.height=H*DPR;ctx.setTransform(DPR,0,0,DPR,0,0);}
 window.addEventListener('resize',resize);
 
+/* ---------- anonymous gameplay analytics (privacy-first: random id, no PII) ----------
+   Fires sendBeacon() pings at: cuddle start, course start, run end. Wrapped so a failed
+   beacon can never affect play. Sink: /api/e -> Cloudflare D1 (see functions/api/e.js). */
+const NUZZ_AID=(function(){try{let a=localStorage.getItem('nuzz:aid');const fresh=!a;
+  if(!a){a=Date.now().toString(36)+Math.random().toString(36).slice(2,10);localStorage.setItem('nuzz:aid',a);}
+  return{id:a,fresh:fresh};}catch(e){return{id:'anon',fresh:true};}})();
+function track(ev,props){try{
+  const body=JSON.stringify(Object.assign({ev:ev,aid:NUZZ_AID.id,t:Date.now()},props||{}));
+  if(navigator.sendBeacon){navigator.sendBeacon('/api/e',new Blob([body],{type:'application/json'}));}
+  else if(window.fetch){fetch('/api/e',{method:'POST',body:body,keepalive:true,headers:{'Content-Type':'application/json'}}).catch(function(){});}
+}catch(e){}}
+
 /* ---------- state ---------- */
 /* phases: intro -> bond -> walk -> done.  walk has its own sub-stages (walkStage). */
 let phase='intro';
@@ -266,6 +278,7 @@ let courseScroll=0;
 let hurdles=[];            // {x, judged, result, knocked}
 let spawnedCount=0, clearedCount=0, perfectCount=0, bestCombo=0;
 let hurdlesPassed=0;       // counts judged hurdles — drives the speed ramp
+let courseBanked=0;        // stamina banked at course start (for analytics)
 let courseSpeed=COURSE_SPEED0;
 let nextSpawn=0;
 let jumpY=0, jumpVel=0, jumpElapsed=0, grounded=true;
@@ -837,6 +850,7 @@ function startRound(){
   timerbar.style.display='block';
   rollSpots();
   promptEl.textContent='Scratch fast! Cover ALL the glowing spots at once for mega points!';
+  track('start',{returning:!NUZZ_AID.fresh});
 }
 actionBtn.addEventListener('click',()=>{
   if(phase==='bond'){ returningToCourse ? resumeCourse() : beginCourse(); return; }
@@ -979,6 +993,8 @@ function beginCourse(){
     +'. Tap to hop, HOLD to leap!';
   promptEl.style.opacity=1;
   blip(392,0.12,'sine',0.14); blip(523,0.12,'sine',0.12);
+  courseBanked=energy;                                  // stamina carried into the run
+  track('course',{banked:courseBanked,need:COURSE_HURDLES*COST_GOOD});
 }
 function coursePress(){
   if(phase!=='course' || courseStage!=='running') return;
@@ -1121,6 +1137,8 @@ function finishCourse(){
   document.getElementById('stamp').textContent='★ CHAPTER 1 — '+title.replace('!','').toUpperCase()+' ★';
   document.querySelector('#endcard p:last-of-type').textContent='Come back tomorrow for another little nuzzle.';
   saveProgress();
+  track('run_end',{result:'finish',reached:COURSE_HURDLES,banked:courseBanked,
+    grade:ribbon,cleared:clearedCount,perfects:perfectCount,combo:bestCombo,left:energy});
   setTimeout(()=>{endcard.style.display='flex';},900);
 }
 function failCourse(){
@@ -1138,6 +1156,8 @@ function failCourse(){
   document.getElementById('stamp').textContent='★ SO CLOSE — TRY AGAIN ★';
   document.querySelector('#endcard p:last-of-type').textContent='Tip: 2 spots at once is worth far more than two single scratches.';
   saveProgress();
+  track('run_end',{result:'fail',reached:hurdlesPassed,banked:courseBanked,
+    cleared:clearedCount,perfects:perfectCount,combo:bestCombo,left:0});
   setTimeout(()=>{endcard.style.display='flex';},700);
 }
 
