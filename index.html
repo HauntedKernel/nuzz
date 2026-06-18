@@ -49,6 +49,10 @@
   .bagshelf .head{font-size:11px;letter-spacing:.14em;text-transform:uppercase;opacity:.75;display:block;margin-bottom:2px}
   #stamp{margin:14px 0 6px;background:var(--sun);border:3px dashed #fff;border-radius:14px;padding:10px 22px;font-size:13px;letter-spacing:.15em;font-weight:bold;color:var(--ink);transform:rotate(-3deg);box-shadow:0 4px 10px rgba(58,74,90,.2)}
   #replay{margin-top:16px;background:#fff;border:none;color:var(--rose);border-radius:26px;padding:12px 28px;font-family:inherit;font-weight:bold;font-size:16px;cursor:pointer;box-shadow:0 4px 0 rgba(58,74,90,.15)}
+  #cta{max-width:340px;background:var(--sun);color:var(--ink);border-radius:14px;padding:12px 16px;margin:14px 0 2px;font-size:13px;line-height:1.5;font-weight:bold;box-shadow:0 4px 10px rgba(58,74,90,.2)}
+  #cta b{color:var(--brand)}
+  #crosslink{display:inline-block;margin-top:14px;color:#fff;text-decoration:underline;font-weight:bold;font-size:15px;cursor:pointer}
+  #crosslink:focus-visible{outline:3px solid var(--rose);outline-offset:3px}
   /* ---- landing strip (quiet, below the game) ---- */
   #strip{max-width:520px;margin:0 auto;padding:24px 20px 40px;text-align:center;background:var(--paper);color:var(--ink)}
   #strip .word{font-size:30px;font-weight:bold;letter-spacing:.01em;color:var(--brand)}
@@ -93,7 +97,9 @@
     <div class="bagshelf"><span class="head">Your scorecard</span><span id="bagList">—</span></div>
     <div id="stamp">★ CHAPTER 1 — DONE ★</div>
     <p style="font-size:13px;opacity:.65;margin-top:8px">Come back tomorrow for another little nuzzle.</p>
+    <div id="cta">📸 Screenshot your scorecard and post it on <b>Instagram</b> or <b>TikTok</b> — tag <b>@nuzz.pet</b> to enter to win a gift card!</div>
     <button id="replay">Play again</button>
+    <a id="crosslink" href="?dog">🐶 Play the other game →</a>
   </div>
 </div>
 <div id="strip">
@@ -134,7 +140,7 @@ function track(ev,props){try{
 /* ---------- state ---------- */
 /* phases: intro -> bond -> walk -> done.  walk has its own sub-stages (walkStage).
    The bird level (LEVEL='nest', via ?nest) uses its own phases: nestIntro -> nest -> nestMom -> done. */
-const LEVEL = location.search.indexOf('nest')!==-1 ? 'nest' : 'dog';
+const LEVEL = location.search.indexOf('dog')!==-1 ? 'dog' : 'nest';   // nest is the landing level now; dog via ?dog
 let phase='intro';
 let energy=0;
 let combo=0, comboTimer=0;
@@ -1618,7 +1624,8 @@ function frame(){
   requestAnimationFrame(frame);
 }
 resize();
-/* ---------- boot the chosen level (?nest launches the bird level) ---------- */
+/* ---------- boot the chosen level (nest is the landing; ?dog = the agility course) ---------- */
+const crosslink=document.getElementById('crosslink');
 if(LEVEL==='nest'){
   phase='nestIntro';
   buildNest();
@@ -1628,6 +1635,9 @@ if(LEVEL==='nest'){
   daytagEl.textContent='The Nest';
   document.querySelector('#endcard .eyebrow').textContent='Nest report';
   promptEl.textContent='Tap to start — then drag worms up into the open beaks!';
+  crosslink.textContent='🐶 Play the agility course →'; crosslink.href='?dog';
+} else {
+  crosslink.textContent='🐦 Play Feed the Nest →'; crosslink.href='?nest';
 }
 requestAnimationFrame(frame);
 })();

@@ -187,8 +187,12 @@ is on Cloudflare's free tier (D1: 100k writes/day; we use ~3 per play).
 ## LEVELS — the dog, and the bird ("Feed the Nest")
 
 The file now holds **two levels**, chosen at load by URL (`const LEVEL` near the top):
-- default → the **dog** (cuddle → agility course), described above.
-- **`nuzz.pet/?nest`** → the **bird** level, "Feed the Nest" (added 2026-06-17).
+- **default (`nuzz.pet`) → the bird level, "Feed the Nest"** — it is the LANDING level as of 2026-06-17.
+- **`nuzz.pet/?dog`** → the **dog** (cuddle → agility course), described above.
+
+Both end cards (shared `#endcard`) show a **cross-link** to the other level (`#crosslink`, set per-level
+at boot) and a **call-to-action** (`#cta`): "Screenshot your scorecard and post it on Instagram or
+TikTok — tag @nuzz.pet to enter to win a gift card." To run a different promo, edit `#cta` in the HTML.
 
 **Bird mechanic.** Six baby chicks open/close their beaks on ramping rhythms. You **scoop a worm
 from the patch along the bottom and drag it up into an OPEN beak** (release to drop). Feed a closed
