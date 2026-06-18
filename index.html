@@ -1248,22 +1248,29 @@ function drawCourse(){
    Feed a closed beak and the worm's wasted. Fill their bellies and they settle, content. When
    time's up, Mama bird flies home and reacts to how well you fed the nest (graded, generous-
    tuned so a happy mama is the norm and the angry dive-bomb is a rare, earned punchline). */
-const NEST_CHICKS=6, NEST_ROUND=24*60, FEED_OPEN_MIN=0.25, FEED_AMOUNT=0.34;
-const NEST_RATE0=0.05, NEST_RATE_RAMP=0.045, NEST_DECAY=0.0005, WORM_ZONE=0.78;
+const NEST_CHICKS=6, NEST_ROUND=24*60, FEED_OPEN_MIN=0.22, FEED_AMOUNT=0.34;
+const NEST_RATE0=0.05, NEST_RATE_RAMP=0.03, NEST_DECAY=0.0005, WORM_ZONE=0.78;
+/* Big chicks in an asymmetrical circular cluster (offsets: r=0..1 of cluster radius, a=angle°). */
+const NEST_LAYOUT=[
+  {r:0.18,a:210,sc:1.65},{r:1.00,a:-94,sc:1.58},{r:1.04,a:-26,sc:1.80},
+  {r:0.96,a:44, sc:1.85},{r:1.02,a:108,sc:1.82},{r:0.98,a:160,sc:1.70}
+];
 let chicks=[], nestCarry=null;
 let nestTimer=0, nestRamp=0, nestFed=0, bestNestCombo=0, nestWarned=false;
 let momT=0, nestVerdict='silver', nestAvg=0, nestHappy=0, nestEnded=false;
 
-function buildNest(){           // positions are FRACTIONAL (fx) so the nest is resize-proof
+function buildNest(){           // cluster slots are resolved from W/H each frame (resize-proof)
   chicks=[];
   for(let i=0;i<NEST_CHICKS;i++){
-    chicks.push({ fx: NEST_CHICKS===1?0.5:i/(NEST_CHICKS-1), back:i%2===0, sc:(i%2===0)?0.9:1.08,
+    const L=NEST_LAYOUT[i%NEST_LAYOUT.length];
+    chicks.push({ slot:i%NEST_LAYOUT.length, sc:L.sc,
       ph:i*1.7, rate:NEST_RATE0*(0.8+0.5*((i*3)%4)/3), full:0.12, fed:0, gulp:0, blink:(i*53)%200 });
   }
 }
 function chickXY(c){
-  const cx=W/2, span=Math.min(W*0.72,330);
-  return { x: cx+(c.fx-0.5)*span, y: H*0.50 + (c.back?-14:12) - Math.sin(c.fx*Math.PI)*6 };
+  const cx=W/2, cy=H*0.53, rx=Math.min(W*0.40,195), ry=Math.min(H*0.14,128);
+  const L=NEST_LAYOUT[c.slot], a=L.a*Math.PI/180;
+  return { x: cx+Math.cos(a)*rx*L.r, y: cy+Math.sin(a)*ry*L.r };
 }
 function chickOpenNow(c){        // 0..1 mouth openness; damped to ~0 once a chick is full
   const ramp = phase==='nest' ? nestRamp*NEST_RATE_RAMP : 0;
@@ -1380,8 +1387,8 @@ function resetNest(){
 /* ---------- bird level: drawing ---------- */
 function drawNestScene(){
   drawSky();
-  const nx=W/2, ny=H*0.56, nw=Math.min(W*0.86,420);
-  drawBranch(ny+46, nw);
+  const nx=W/2, ny=H*0.60, nw=Math.min(W*0.96,470);
+  drawBranch(ny+58, nw);
   drawNestBowl(nx,ny,nw,false);
   chicks.slice().sort((a,b)=>chickXY(a).y - chickXY(b).y).forEach(drawChick);
   drawNestBowl(nx,ny,nw,true);
@@ -1396,7 +1403,7 @@ function drawBranch(y,w){
   ctx.restore();
 }
 function drawNestBowl(nx,ny,nw,front){
-  const nh=64, rx=nw/2;
+  const nh=96, rx=nw/2;
   ctx.save(); ctx.lineJoin='round';
   if(!front){
     ctx.fillStyle='#a9742f'; ctx.strokeStyle='#7a5320'; ctx.lineWidth=3;
@@ -1461,32 +1468,34 @@ function drawChick(c){
     ctx.strokeText('♪',14,-20); ctx.fillStyle='#fff'; ctx.fillText('♪',14,-20); }
   ctx.restore();
 }
-function drawWorm(x,y,sc){
+function drawWorm(x,y,sc,phase){
+  phase=phase||0;
   ctx.save(); ctx.translate(x,y); ctx.scale(sc,sc);
-  ctx.strokeStyle='#e08aa0'; ctx.lineWidth=6; ctx.lineCap='round'; ctx.lineJoin='round';
-  ctx.beginPath();
-  for(let k=0;k<5;k++){ const xx=(k-2)*6, yy=Math.sin(t*0.3+k*0.8)*3; if(k===0)ctx.moveTo(xx,yy); else ctx.lineTo(xx,yy); }
-  ctx.stroke();
-  ctx.fillStyle='#c96f88'; ctx.beginPath(); ctx.arc(12,Math.sin(t*0.3+3.2)*3,3.2,0,7); ctx.fill();
+  ctx.lineCap='round'; ctx.lineJoin='round';
+  const pts=[]; for(let k=0;k<5;k++) pts.push([(k-2)*7, Math.sin(t*0.3+phase+k*0.8)*3.4]);
+  const path=()=>{ ctx.beginPath(); pts.forEach((p,k)=>k?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1])); };
+  ctx.strokeStyle='#8a4257'; ctx.lineWidth=10; path(); ctx.stroke();   // dark outline = visible on any bg
+  ctx.strokeStyle='#f2a0b6'; ctx.lineWidth=6.5; path(); ctx.stroke();  // plump pink body
+  const h=pts[4];
+  ctx.fillStyle='#d76f88'; ctx.beginPath(); ctx.arc(h[0]+2,h[1],3.6,0,7); ctx.fill();
+  ctx.fillStyle='#3a2a30'; ctx.beginPath(); ctx.arc(h[0]+3,h[1]-1,1.1,0,7); ctx.fill();
   ctx.restore();
 }
-function drawCarriedWorm(){ if(nestCarry) drawWorm(nestCarry.x,nestCarry.y,1.35); }
+function drawCarriedWorm(){ if(nestCarry) drawWorm(nestCarry.x,nestCarry.y,2.2); }
 function drawWormPatch(){
   ctx.save();
   const y0=H*0.82;
   ctx.fillStyle='#6b4a2a'; ctx.beginPath(); ctx.moveTo(0,y0+10);
   for(let x=0;x<=W;x+=24) ctx.lineTo(x, y0 - 6*Math.sin(x*0.03)); ctx.lineTo(W,H); ctx.lineTo(0,H); ctx.closePath(); ctx.fill();
   ctx.fillStyle='#7d5732'; ctx.fillRect(0,y0+20,W,H);
-  ctx.strokeStyle='#e08aa0'; ctx.lineWidth=5; ctx.lineCap='round';
-  for(let i=0;i<6;i++){ const wx=(i+0.5)/6*W, ph=i*1.3+t*0.06; ctx.beginPath();
-    for(let k=0;k<4;k++){ const yy=y0+8-k*7, xx=wx+Math.sin(ph+k*0.9)*4; if(k===0)ctx.moveTo(xx,yy); else ctx.lineTo(xx,yy);} ctx.stroke(); }
+  for(let i=0;i<5;i++){ drawWorm((i+0.5)/5*W, y0+4, 1.35, i*1.7); }
   ctx.fillStyle='rgba(255,255,255,.9)'; ctx.font='bold 12px sans-serif'; ctx.textAlign='center';
   ctx.strokeStyle='rgba(58,74,90,.5)'; ctx.lineWidth=3;
   ctx.strokeText('↑ scoop a worm from here',W/2,H-10); ctx.fillStyle='#fff'; ctx.fillText('↑ scoop a worm from here',W/2,H-10);
   ctx.restore();
 }
 function drawMom(){
-  const nx=W/2, ny=H*0.56, nw=Math.min(W*0.86,420), angry=nestVerdict==='angry';
+  const nx=W/2, ny=H*0.60, nw=Math.min(W*0.96,470), angry=nestVerdict==='angry';
   let mx,my,flap=Math.sin(momT*0.5);
   if(angry){ const k=Math.min(1,momT/30); mx=nx; my=-50+(ny-30-(-50))*k; if(momT>30)my=ny-30+Math.sin(momT*0.3)*6; }
   else { const k=Math.min(1,momT/55), e=1-Math.pow(1-k,2);
