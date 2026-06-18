@@ -1571,72 +1571,73 @@ function drawNestIntroText(){
    (multi-touch — pin one while you grab others) up to the SAFE PEN at the top-left. A panda that
    reaches the cliff harmlessly tumbles off into the hay (no injury — keep it kind) and the zookeeper
    has to fetch it. Time-boxed round; the zookeeper reacts at the end, graded by how many escaped. */
-const PANDA_ROUND=30*60, PANDA_COUNT=12, SAFE_LINE=0.20, DANGER_Y=0.90;
-const PANDA_GRAB=46, PANDA_DIR={x:0.20,y:0.98};
-let pandas=[], pandaTimer=0, pandaRamp=0, pandaSafe=0, pandaEscaped=0;
+const PANDA_ROUND=30*60, PANDA_COUNT=12, SAFE_LINE=0.28, DANGER_Y=0.88;
+const PANDA_GRAB=46, PANDA_DIR={x:0.16,y:0.99};   // slide mostly straight down the hill
+let pandas=[], pandaTimer=0, pandaRamp=0, pandaEscaped=0;
 let pandaWarned=false, zooT=0, pandaVerdict='silver', pandaEnded=false;
 
-function spawnPanda(){   // scattered across the hill, below the safety line, above the cliff
-  pandas.push({ x:W*(0.08+Math.random()*0.84), y:H*(0.30+Math.random()*0.52),
-    ang:0, vr:0, state:'slide', spd:0.9, stT:20+Math.random()*40,
-    heldBy:null, safe:false, wob:Math.random()*6 });
+function spawnPanda(){   // ALL pandas start bunched on the grassy crest, above the safety line
+  pandas.push({ x:W*(0.18+Math.random()*0.64), y:H*(0.13+Math.random()*0.12),
+    ang:0, vr:0, state:'rest', spd:0, stT:0, tipT:120+Math.random()*240,
+    heldBy:null, wob:Math.random()*6 });
 }
 function startPanda(){
-  phase='panda'; pandaTimer=PANDA_ROUND; pandaRamp=0; pandaSafe=0; pandaEscaped=0;
+  phase='panda'; pandaTimer=PANDA_ROUND; pandaRamp=0; pandaEscaped=0;
   pandaWarned=false; pandaEnded=false;
-  pandas=[]; for(let i=0;i<PANDA_COUNT;i++) spawnPanda();   // ALL pandas present from the start
-  ecount.textContent='0';
+  pandas=[]; for(let i=0;i<PANDA_COUNT;i++) spawnPanda();   // all bunched on the crest
+  ecount.textContent=String(PANDA_COUNT);
   timerbar.style.display='block'; timerfill.style.width='100%';
-  promptEl.textContent='Drag every clumsy panda up past the safety line!'; promptEl.style.opacity=1;
+  promptEl.textContent='Keep them above the line — drag the tumblers back up!'; promptEl.style.opacity=1;
   blip(330,0.12,'sine',0.14); blip(440,0.12,'sine',0.12);
   track('start',{level:'panda',returning:!NUZZ_AID.fresh});
 }
 function pandaSetState(c,st){
   c.state=st;
-  if(st==='rest'){ c.spd=0; c.stT=14+Math.random()*26; c.vr*=0.3; }
+  if(st==='rest'){ c.spd=0; c.vr=0; c.ang=0; c.tipT=(70+Math.random()*200)*(1-pandaRamp*0.7); }
   else if(st==='slide'){ c.spd=0.9+Math.random()*0.9; c.stT=34+Math.random()*46; c.vr=(Math.random()-0.5)*0.08; }
-  else { c.state='tumble'; c.spd=3.2+Math.random()*2.2; c.stT=22+Math.random()*34; c.vr=(Math.random()-0.5)*0.6; }
+  else { c.state='tumble'; c.spd=3.0+Math.random()*2.0; c.stT=22+Math.random()*34; c.vr=(Math.random()-0.5)*0.6; }
 }
 function pandaNextState(c){
   const r=Math.random();
-  if(c.state==='tumble') pandaSetState(c, r<0.65?'slide':'rest');
-  else if(c.state==='slide') pandaSetState(c, r<0.55?'tumble':(r<0.72?'rest':'slide'));
-  else pandaSetState(c, r<0.85?'slide':'tumble');   // rest -> mostly slide
+  if(c.state==='tumble') pandaSetState(c, r<0.75?'slide':'tumble');
+  else pandaSetState(c, r<0.55?'tumble':'slide');   // loose on the slope: slide<->tumble only
 }
 function updatePandaLevel(){
   if(pandaTimer<=0) return;
   pandaTimer--; pandaRamp=1-pandaTimer/PANDA_ROUND;
   timerfill.style.width=Math.max(0,pandaTimer/PANDA_ROUND*100)+'%';
-  const speed=1+pandaRamp*0.5;
+  const speed=0.5+pandaRamp*1.1;                          // falls slowly at first, then accelerates
   for(let i=pandas.length-1;i>=0;i--){
     const c=pandas[i];
-    if(c.heldBy!=null || c.safe) continue;
+    if(c.heldBy!=null) continue;
+    if(c.state==='rest'){
+      if(c.y<H*SAFE_LINE){ c.tipT--; if(c.tipT<=0) pandaSetState(c,'slide'); }  // resting on the crest until it tips
+      else pandaSetState(c,'slide');                       // can't rest on the slope
+      continue;
+    }
     c.stT--; if(c.stT<=0) pandaNextState(c);
     const wob = c.state==='tumble' ? Math.sin(t*0.5+c.wob)*0.9 : Math.sin(t*0.1+c.wob)*0.2;
     c.x += PANDA_DIR.x*c.spd*speed + wob;
     c.y += PANDA_DIR.y*c.spd*speed;
     c.ang += c.vr*(c.state==='tumble'?1:0.3);
-    if(c.x<8)c.x=8; else if(c.x>W-8)c.x=W-8;             // bounce off the sides; only the bottom is danger
-    if(c.y>H*DANGER_Y){ pandas.splice(i,1); pandaEscaped++; shake=8; sadTrombone();
-      floater(Math.min(Math.max(c.x,30),W-30), H*DANGER_Y-12, 'escaped!', '#ff8fa3'); }
+    if(c.x<8)c.x=8; else if(c.x>W-8)c.x=W-8;
+    if(c.y>H*DANGER_Y){ pandas.splice(i,1); pandaEscaped++; ecount.textContent=String(pandas.length);
+      shake=8; sadTrombone(); floater(Math.min(Math.max(c.x,30),W-30), H*DANGER_Y-12, 'escaped!', '#ff8fa3'); }
   }
-  if(!pandaWarned && pandaTimer<PANDA_ROUND*0.18){ pandaWarned=true; promptEl.textContent='Almost shift change — get the stragglers up!'; }
-  if(pandas.every(p=>p.safe)) endPandaRound();            // every panda saved or lost -> wrap up early
-  else if(pandaTimer<=0) endPandaRound();
+  if(!pandaWarned && pandaTimer<PANDA_ROUND*0.18){ pandaWarned=true; promptEl.textContent='Almost shift change — hang on!'; }
+  if(pandas.length===0 || pandaTimer<=0) endPandaRound();
 }
 function pandaGrab(p){
   let best=null,bd=PANDA_GRAB*PANDA_GRAB;
-  for(const c of pandas){ if(c.safe||c.heldBy!=null) continue;
+  for(const c of pandas){ if(c.heldBy!=null) continue;
     const dx=p.x-c.x, dy=p.y-c.y, d=dx*dx+dy*dy; if(d<bd){bd=d;best=c;} }
-  if(best){ best.heldBy=p.id; best.state='held'; best.vr*=0.2; blip(420,0.05,'sine',0.10); }
+  if(best){ best.heldBy=p.id; best.state='held'; best.vr=0; blip(420,0.05,'sine',0.10); }
 }
 function pandaDrag(p){ for(const c of pandas){ if(c.heldBy===p.id){ c.x=p.x; c.y=p.y; return; } } }
 function pandaRelease(c){
   c.heldBy=null;
-  if(c.y < H*SAFE_LINE){
-    c.safe=true; c.state='safe'; c.ang=0; c.vr=0; pandaSafe++; ecount.textContent=pandaSafe;
-    burst(c.x,c.y,5,'heart'); blip(720,0.10,'sine',0.13);
-  } else pandaSetState(c,'rest');
+  if(c.y < H*SAFE_LINE){ pandaSetState(c,'rest'); burst(c.x,c.y,3,'spark'); blip(680,0.08,'sine',0.12); }  // back on the crest
+  else pandaSetState(c,'slide');                                                                            // dropped on the slope
 }
 function endPandaRound(){
   pandaVerdict = pandaEscaped<=1?'gold':(pandaEscaped<=3?'silver':(pandaEscaped<=6?'bronze':'oops'));
@@ -1665,16 +1666,16 @@ function showPandaEnd(){
   eyebrow.textContent=eb; eyebrow.style.color='#fff';
   endTitle.textContent=title; endBlurb.textContent=blurb;
   head.textContent='Shift report';
-  bagList.textContent='Pandas saved '+pandaSafe+' · escaped '+pandaEscaped+' · still on the hill '+pandas.filter(p=>!p.safe).length;
+  bagList.textContent='Kept on the hill '+pandas.length+' / '+PANDA_COUNT+' · escaped '+pandaEscaped;
   document.getElementById('stamp').textContent=stamp;
   lastP.textContent=last;
-  track('run_end',{level:'panda',result:pandaVerdict,reached:pandaSafe,banked:pandaEscaped,combo:0});
+  track('run_end',{level:'panda',result:pandaVerdict,reached:pandas.length,banked:pandaEscaped,combo:0});
   pandaEnded=true; endcard.style.display='flex';
 }
 function resetPanda(){
   endcard.style.display='none'; phase='pandaIntro';
   pandas=[]; for(let i=0;i<PANDA_COUNT;i++) spawnPanda();
-  pandaSafe=0; pandaEscaped=0; pandaEnded=false; ecount.textContent='0';
+  pandaEscaped=0; pandaEnded=false; ecount.textContent=String(PANDA_COUNT);
   timerbar.style.display='none';
   promptEl.textContent='Tap to start — drag the pandas up past the safety line!'; promptEl.style.opacity=1;
 }
@@ -1687,21 +1688,24 @@ function drawPandaScene(){
   if(phase==='pandaEnd') drawZoo();
 }
 function drawHill(){
+  // grassy hillside fills the screen (only a sliver of sky up top); gently rounded crest
   ctx.fillStyle='#9ed468';
-  ctx.beginPath(); ctx.moveTo(0,H*0.18); ctx.lineTo(W,H*0.55); ctx.lineTo(W,H); ctx.lineTo(0,H); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(0,H*0.12); ctx.quadraticCurveTo(W*0.5,H*0.05,W,H*0.12);
+  ctx.lineTo(W,H); ctx.lineTo(0,H); ctx.closePath(); ctx.fill();
+  // slope contour shading
   ctx.strokeStyle='rgba(122,160,80,.4)'; ctx.lineWidth=2;
-  for(let i=1;i<7;i++){ ctx.beginPath(); ctx.moveTo(0,H*0.18+i*16); ctx.lineTo(W,H*0.55+i*16); ctx.stroke(); }
-  // danger fence + hay at the bottom (the cliff)
+  for(let i=0;i<8;i++){ const yy=H*0.34+i*((H*0.50)/8); ctx.beginPath(); ctx.moveTo(0,yy); ctx.bezierCurveTo(W*0.3,yy-6,W*0.7,yy+6,W,yy); ctx.stroke(); }
+  // SAFETY LINE — a dashed path ON the grass; keep pandas ABOVE it (on the crest)
+  const ly=H*SAFE_LINE;
+  ctx.strokeStyle='#e6c98a'; ctx.lineWidth=6; ctx.setLineDash([16,11]);
+  ctx.beginPath(); ctx.moveTo(0,ly); ctx.lineTo(W,ly); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle='rgba(58,74,90,.6)'; ctx.font='bold 12px sans-serif'; ctx.textAlign='center';
+  ctx.fillText('keep the pandas above this line',W/2,ly-9);
+  // cliff + hay at the bottom
   ctx.fillStyle='#caa46a'; ctx.fillRect(0,H*0.88,W,H*0.12);
   ctx.fillStyle='#b8923f';
   for(let x=0;x<W;x+=40){ ctx.beginPath(); ctx.moveTo(x,H*0.90); ctx.lineTo(x+14,H*0.96); ctx.lineTo(x-14,H*0.96); ctx.closePath(); ctx.fill(); }
   ctx.strokeStyle='#7a5320'; ctx.lineWidth=4; ctx.beginPath(); ctx.moveTo(0,H*0.88); ctx.lineTo(W,H*0.88); ctx.stroke();
-  // safety line across the top — drag pandas ABOVE it to add them to the pile
-  ctx.fillStyle='rgba(255,248,236,.45)'; ctx.fillRect(0,0,W,H*SAFE_LINE);
-  ctx.strokeStyle='#caa05f'; ctx.lineWidth=4; ctx.setLineDash([12,9]);
-  ctx.beginPath(); ctx.moveTo(0,H*SAFE_LINE); ctx.lineTo(W,H*SAFE_LINE); ctx.stroke(); ctx.setLineDash([]);
-  ctx.fillStyle='rgba(58,74,90,.6)'; ctx.font='bold 12px sans-serif'; ctx.textAlign='center';
-  ctx.fillText('↑ SAFETY — pile them up here',W/2,H*SAFE_LINE-7);
 }
 function drawPandaSprite(c){
   ctx.save(); ctx.translate(c.x,c.y); ctx.rotate(c.ang); ctx.scale(c.heldBy!=null?1.1:1,c.heldBy!=null?1.1:1);
@@ -1713,15 +1717,11 @@ function drawPandaSprite(c){
   ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(0,-6,11,0,7); ctx.fill(); ctx.stroke();
   ctx.fillStyle='#2a2a30';
   ctx.beginPath(); ctx.ellipse(-4,-7,3,4,-0.3,0,7); ctx.fill(); ctx.beginPath(); ctx.ellipse(4,-7,3,4,0.3,0,7); ctx.fill();
-  if(c.safe){ ctx.strokeStyle='#fff'; ctx.lineWidth=1.5;
-    ctx.beginPath(); ctx.moveTo(-5,-7); ctx.lineTo(-3,-7); ctx.moveTo(3,-7); ctx.lineTo(5,-7); ctx.stroke(); }
-  else if(c.state==='tumble'){ ctx.fillStyle='#fff'; ctx.font='bold 7px sans-serif'; ctx.textAlign='center';
+  if(c.state==='tumble'){ ctx.fillStyle='#fff'; ctx.font='bold 7px sans-serif'; ctx.textAlign='center';
     ctx.fillText('@',-4,-5); ctx.fillText('@',4,-5); }   // dizzy eyes while tumbling
   else { ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(-4,-7,1.3,0,7); ctx.fill(); ctx.beginPath(); ctx.arc(4,-7,1.3,0,7); ctx.fill(); }
   ctx.fillStyle='#2a2a30'; ctx.beginPath(); ctx.arc(0,-3,1.6,0,7); ctx.fill();
   ctx.restore();
-  if(c.safe){ ctx.fillStyle='#fff'; ctx.font='bold 11px sans-serif'; ctx.textAlign='center';
-    ctx.strokeStyle='rgba(58,74,90,.4)'; ctx.lineWidth=3; ctx.strokeText('z',c.x+14,c.y-16); ctx.fillStyle='#fff'; ctx.fillText('z',c.x+14,c.y-16); }
 }
 function drawZoo(){
   const angry=pandaVerdict==='oops';
@@ -1746,7 +1746,7 @@ function drawPandaIntroText(){
   ctx.font='bold 18px sans-serif';
   ctx.strokeText('Falling Pandas',W/2,H*0.46); ctx.fillStyle='#fff'; ctx.fillText('Falling Pandas',W/2,H*0.46);
   ctx.font='bold 14px sans-serif'; ctx.strokeStyle='rgba(58,74,90,.5)';
-  ctx.strokeText('Drag the clumsy pandas up past the safety line.',W/2,H*0.46+24); ctx.fillStyle='#fff'; ctx.fillText('Drag the clumsy pandas up past the safety line.',W/2,H*0.46+24);
+  ctx.strokeText('Keep the clumsy pandas above the line.',W/2,H*0.46+24); ctx.fillStyle='#fff'; ctx.fillText('Keep the clumsy pandas above the line.',W/2,H*0.46+24);
 }
 
 /* ---------- main loop: fixed 60Hz simulation, rendered once per displayed frame ----------
@@ -1860,9 +1860,9 @@ if(LEVEL==='nest'){
 } else if(LEVEL==='panda'){
   phase='pandaIntro';
   for(let i=0;i<PANDA_COUNT;i++) spawnPanda();   // all pandas present on the hill for the intro
-  const eb=document.querySelector('#energybox .eyebrow'); if(eb) eb.textContent='Pandas safe';
+  const eb=document.querySelector('#energybox .eyebrow'); if(eb) eb.textContent='Pandas left';
   const bone=document.querySelector('#energy .bone'); if(bone) bone.textContent='🐼';
-  ecount.textContent='0';
+  ecount.textContent=String(PANDA_COUNT);
   daytagEl.textContent='Panda Hill';
   document.querySelector('#endcard .eyebrow').textContent='Shift report';
   promptEl.textContent='Tap to start — drag the pandas up past the safety line!';

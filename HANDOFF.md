@@ -189,14 +189,16 @@ is on Cloudflare's free tier (D1: 100k writes/day; we use ~3 per play).
 The file now holds **three levels**, chosen at load by URL (`const LEVEL` near the top):
 - **default (`nuzz.pet`) → the bird level, "Feed the Nest"** — the LANDING level as of 2026-06-17.
 - **`nuzz.pet/?dog`** → the **dog** (cuddle → agility course), described above.
-- **`nuzz.pet/?panda`** → **"Falling Pandas"** (added 2026-06-18): **all `PANDA_COUNT` (12) pandas are
-  present from the start**, scattered on a hill; they slide/tumble down on variable rest→slide→tumble
-  timers toward the bottom cliff. **Multi-touch drag** them up past the **SAFETY LINE** at the top
-  (`SAFE_LINE`) — above it they pile up safe (pin one finger, grab others). Round ends when all are
-  saved-or-lost (or the timer runs out). Escapes are harmless (tumble into hay); a graded **zookeeper**
-  verdict ends it (gold/silver/bronze/oops by escape count). Faked physics — no real collisions/stacking.
-  Tuning: `PANDA_*` consts (count, speeds in `pandaSetState`, `SAFE_LINE`/`DANGER_Y`) + thresholds in
-  `endPandaRound()`. Phases: `pandaIntro → panda → pandaEnd`.
+- **`nuzz.pet/?panda`** → **"Falling Pandas"** (added 2026-06-18): all `PANDA_COUNT` (12) pandas start
+  **bunched, resting on the grassy crest above the `SAFE_LINE`**. Each tips over after a `tipT` timer
+  (long at first, shorter as the round ramps) and slides/tumbles **down the hill, slowly then
+  accelerating** (`speed=0.5+ramp*1.1`). **Multi-touch drag** the tumblers back up above the line, where
+  they rest again (pin one finger, grab others). A panda is only ever *currently* up — it isn't
+  permanently safe; the game is containment. Reaching the bottom cliff = a harmless escape (into hay).
+  Timed round; a graded **zookeeper** verdict ends it (gold/silver/bronze/oops by escape count). HUD
+  counts pandas still on the hill. Faked physics — no real collisions/stacking. The SAFE_LINE is drawn
+  ON the grass (crest), not in the sky. Tuning: `PANDA_*` consts, speeds/`tipT` in `pandaSetState`,
+  `SAFE_LINE`/`DANGER_Y`, thresholds in `endPandaRound()`. Phases: `pandaIntro → panda → pandaEnd`.
 
 Each end card (shared `#endcard`) shows a **cross-link** that cycles **nest → dog → panda → nest**
 (`#crosslink`, set per level at boot) and a **call-to-action** (`#cta`): "Screenshot your scorecard
