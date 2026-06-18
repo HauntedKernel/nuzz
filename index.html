@@ -1249,7 +1249,7 @@ function drawCourse(){
    time's up, Mama bird flies home and reacts to how well you fed the nest (graded, generous-
    tuned so a happy mama is the norm and the angry dive-bomb is a rare, earned punchline). */
 const NEST_CHICKS=6, NEST_ROUND=24*60, FEED_OPEN_MIN=0.18, FEED_AMOUNT=0.34;
-const NEST_RATE0=0.02, NEST_RATE_RAMP=0.018, NEST_DECAY=0.0005, WORM_ZONE=0.78;
+const NEST_RATE0=0.02, NEST_RATE_RAMP=0.018, NEST_DECAY=0.0005, WORM_ZONE=0.78, WORM_SC=4.2;
 /* Big chicks in an asymmetrical circular cluster (offsets: r=0..1 of cluster radius, a=angle°). */
 const NEST_LAYOUT=[
   {r:0.18,a:210,sc:1.65},{r:1.00,a:-94,sc:1.58},{r:1.04,a:-26,sc:1.80},
@@ -1278,11 +1278,21 @@ function chickOpenNow(c){        // 0..1 mouth openness; damped to ~0 once a chi
   const ramp = phase==='nest' ? nestRamp*NEST_RATE_RAMP : 0;
   return Math.max(0, Math.sin(t*(c.rate+ramp)+c.ph)) * (0.32+0.68*(1-c.full));
 }
-function chickAt(x,y){           // nearest non-full chick under (x,y) whose mouth is open (or was, within grace)
+function segDist(px,py,ax,ay,bx,by){   // distance from point to a line segment
+  const dx=bx-ax, dy=by-ay, L2=dx*dx+dy*dy;
+  let u = L2 ? ((px-ax)*dx+(py-ay)*dy)/L2 : 0; u=Math.max(0,Math.min(1,u));
+  return Math.hypot(px-(ax+u*dx), py-(ay+u*dy));
+}
+function chickAt(x,y){           // feed if ANY part of the (big) worm overlaps an open mouth
+  // the worm is a fat capsule: head at the fingertip (x,y), body trailing left (see drawWorm)
+  const tailX=x-28*WORM_SC, wormR=5*WORM_SC;
   let best=null,bd=1e9;
   for(const c of chicks){ if(c.full>=1) continue;
-    const p=chickXY(c), d=Math.hypot(x-p.x,y-p.y);
-    if(d < 46*c.sc && (chickOpenNow(c)>FEED_OPEN_MIN || c.openHold>0) && d<bd){ bd=d; best=c; } }
+    if(!(chickOpenNow(c)>FEED_OPEN_MIN || c.openHold>0)) continue;
+    const p=chickXY(c);
+    const d=segDist(p.x, p.y-2*c.sc, x,y, tailX,y);   // mouth-to-worm-body distance
+    if(d < wormR + 24*c.sc && d<bd){ bd=d; best=c; }
+  }
   return best;
 }
 function startNest(){
@@ -1484,7 +1494,7 @@ function drawWorm(x,y,sc,phase){
   ctx.fillStyle='#3a2a30'; ctx.beginPath(); ctx.arc(h[0]+3,h[1]-1,1.1,0,7); ctx.fill();
   ctx.restore();
 }
-function drawCarriedWorm(){ if(nestCarry) drawWorm(nestCarry.x,nestCarry.y,4.2); }
+function drawCarriedWorm(){ if(nestCarry) drawWorm(nestCarry.x,nestCarry.y,WORM_SC); }
 function drawWormPatch(){
   ctx.save();
   const y0=H*0.82;
