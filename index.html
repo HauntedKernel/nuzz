@@ -1578,7 +1578,7 @@ let pandaWarned=false, zooT=0, pandaVerdict='silver', pandaEnded=false;
 
 function spawnPanda(){   // ALL pandas start bunched on the grassy crest, above the safety line
   pandas.push({ x:W*(0.18+Math.random()*0.64), y:H*(0.13+Math.random()*0.12),
-    ang:0, vr:0, state:'rest', spd:0, stT:0, tipT:120+Math.random()*240,
+    ang:0, vr:0, state:'rest', spd:0, stT:0, tipT:180+Math.random()*300,
     heldBy:null, wob:Math.random()*6 });
 }
 function startPanda(){
@@ -1593,7 +1593,7 @@ function startPanda(){
 }
 function pandaSetState(c,st){
   c.state=st;
-  if(st==='rest'){ c.spd=0; c.vr=0; c.ang=0; c.tipT=(70+Math.random()*200)*(1-pandaRamp*0.7); }
+  if(st==='rest'){ c.spd=0; c.vr=0; c.ang=0; c.tipT=(140+Math.random()*240)*(1-pandaRamp*0.6); }  // stays up a while before tipping again
   else if(st==='slide'){ c.spd=0.9+Math.random()*0.9; c.stT=34+Math.random()*46; c.vr=(Math.random()-0.5)*0.08; }
   else { c.state='tumble'; c.spd=3.0+Math.random()*2.0; c.stT=22+Math.random()*34; c.vr=(Math.random()-0.5)*0.6; }
 }
@@ -1607,12 +1607,15 @@ function updatePandaLevel(){
   pandaTimer--; pandaRamp=1-pandaTimer/PANDA_ROUND;
   timerfill.style.width=Math.max(0,pandaTimer/PANDA_ROUND*100)+'%';
   const speed=0.5+pandaRamp*1.1;                          // falls slowly at first, then accelerates
+  const maxFalling=Math.round(3+pandaRamp*3);             // cap how many tumble at once (3 -> 6 over the round)
+  let falling=0; for(const c of pandas){ if(c.heldBy==null && c.state!=='rest') falling++; }
   for(let i=pandas.length-1;i>=0;i--){
     const c=pandas[i];
     if(c.heldBy!=null) continue;
     if(c.state==='rest'){
-      if(c.y<H*SAFE_LINE){ c.tipT--; if(c.tipT<=0) pandaSetState(c,'slide'); }  // resting on the crest until it tips
-      else pandaSetState(c,'slide');                       // can't rest on the slope
+      if(c.y<H*SAFE_LINE){ c.tipT--;
+        if(c.tipT<=0){ if(falling<maxFalling){ pandaSetState(c,'slide'); falling++; } else { c.tipT=18+Math.random()*30; } }
+      } else pandaSetState(c,'slide');                     // can't rest on the slope
       continue;
     }
     c.stT--; if(c.stT<=0) pandaNextState(c);

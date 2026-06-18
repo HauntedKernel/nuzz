@@ -197,8 +197,9 @@ The file now holds **three levels**, chosen at load by URL (`const LEVEL` near t
   permanently safe; the game is containment. Reaching the bottom cliff = a harmless escape (into hay).
   Timed round; a graded **zookeeper** verdict ends it (gold/silver/bronze/oops by escape count). HUD
   counts pandas still on the hill. Faked physics — no real collisions/stacking. The SAFE_LINE is drawn
-  ON the grass (crest), not in the sky. Tuning: `PANDA_*` consts, speeds/`tipT` in `pandaSetState`,
-  `SAFE_LINE`/`DANGER_Y`, thresholds in `endPandaRound()`. Phases: `pandaIntro → panda → pandaEnd`.
+  ON the grass (crest), not in the sky. Tuning: `PANDA_*` consts, speeds/`tipT` in `pandaSetState` (how slow the cadence starts + how long they
+  stay up after a rescue), `maxFalling` in `updatePandaLevel` (cap on how many tumble at once, 3→6 over
+  the round), `SAFE_LINE`/`DANGER_Y`, thresholds in `endPandaRound()`. Phases: `pandaIntro → panda → pandaEnd`.
 
 Each end card (shared `#endcard`) shows a **cross-link** that cycles **nest → dog → panda → nest**
 (`#crosslink`, set per level at boot) and a **call-to-action** (`#cta`): "Screenshot your scorecard
