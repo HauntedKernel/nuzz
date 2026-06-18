@@ -1607,7 +1607,7 @@ function updatePandaLevel(){
   pandaTimer--; pandaRamp=1-pandaTimer/PANDA_ROUND;
   timerfill.style.width=Math.max(0,pandaTimer/PANDA_ROUND*100)+'%';
   const speed=0.5+pandaRamp*1.1;                          // falls slowly at first, then accelerates
-  const maxFalling=Math.round(3+pandaRamp*3);             // cap how many tumble at once (3 -> 6 over the round)
+  const maxFalling=Math.round(2+pandaRamp*2);             // cap how many tumble at once (2 -> 4 over the round)
   let falling=0; for(const c of pandas){ if(c.heldBy==null && c.state!=='rest') falling++; }
   for(let i=pandas.length-1;i>=0;i--){
     const c=pandas[i];
