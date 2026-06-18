@@ -51,8 +51,11 @@
   #replay{margin-top:16px;background:#fff;border:none;color:var(--rose);border-radius:26px;padding:12px 28px;font-family:inherit;font-weight:bold;font-size:16px;cursor:pointer;box-shadow:0 4px 0 rgba(58,74,90,.15)}
   #cta{max-width:340px;background:var(--sun);color:var(--ink);border-radius:14px;padding:12px 16px;margin:14px 0 2px;font-size:13px;line-height:1.5;font-weight:bold;box-shadow:0 4px 10px rgba(58,74,90,.2)}
   #cta b{color:var(--brand)}
-  #crosslink{display:inline-block;margin-top:14px;color:#fff;text-decoration:underline;font-weight:bold;font-size:15px;cursor:pointer}
-  #crosslink:focus-visible{outline:3px solid var(--rose);outline-offset:3px}
+  #more{margin-top:18px;width:100%;display:flex;flex-direction:column;align-items:center}
+  .moreHead{font-size:21px;font-weight:bold;color:#fff;text-shadow:0 2px 0 rgba(58,74,90,.35);margin-bottom:10px}
+  #morelinks{display:flex;flex-direction:column;gap:9px;align-items:center;width:100%}
+  .morelink{display:inline-block;background:#fff;color:var(--rose);border-radius:24px;padding:11px 30px;text-decoration:none;font-weight:bold;font-size:16px;box-shadow:0 4px 0 rgba(58,74,90,.15);min-width:230px;text-align:center}
+  .morelink:focus-visible{outline:3px solid var(--rose);outline-offset:3px}
   /* ---- landing strip (quiet, below the game) ---- */
   #strip{max-width:520px;margin:0 auto;padding:24px 20px 40px;text-align:center;background:var(--paper);color:var(--ink)}
   #strip .word{font-size:30px;font-weight:bold;letter-spacing:.01em;color:var(--brand)}
@@ -98,8 +101,11 @@
     <div id="stamp">★ CHAPTER 1 — DONE ★</div>
     <p style="font-size:13px;opacity:.65;margin-top:8px">Come back tomorrow for another little nuzzle.</p>
     <div id="cta">📸 Screenshot your scorecard and post it on <b>Instagram</b> or <b>TikTok</b> — tag <b>@nuzz.pet</b> to enter to win a gift card!</div>
+    <div id="more">
+      <div class="moreHead">Play the other levels</div>
+      <div id="morelinks"></div>
+    </div>
     <button id="replay">Play again</button>
-    <a id="crosslink" href="?dog">🐶 Play the other game →</a>
   </div>
 </div>
 <div id="strip">
@@ -141,7 +147,7 @@ function track(ev,props){try{
 /* phases: intro -> bond -> walk -> done.  walk has its own sub-stages (walkStage).
    The bird level (LEVEL='nest', via ?nest) uses its own phases: nestIntro -> nest -> nestMom -> done. */
 const LEVEL = location.search.indexOf('dog')!==-1 ? 'dog'
-            : (location.search.indexOf('panda')!==-1 ? 'panda' : 'nest');   // nest = landing; ?dog / ?panda for the others
+            : (location.search.indexOf('nest')!==-1 ? 'nest' : 'panda');   // panda = landing now; ?nest / ?dog for the others
 
 /* ---------- client error reporting (so we can see crashes on devices we can't test) ----------
    Beacons the first few JS errors to the same /api/e sink as ev:'error'. Capped so a crash loop
@@ -1847,9 +1853,7 @@ function frame(now){
   requestAnimationFrame(frame);
 }
 resize();
-/* ---------- boot the chosen level (nest = landing; ?dog / ?panda for the others) ----------
-   Cross-link cycles through all three so players can discover them: nest → dog → panda → nest. */
-const crosslink=document.getElementById('crosslink');
+/* ---------- boot the chosen level (panda = landing; ?nest / ?dog for the others) ---------- */
 if(LEVEL==='nest'){
   phase='nestIntro';
   buildNest();
@@ -1859,7 +1863,6 @@ if(LEVEL==='nest'){
   daytagEl.textContent='The Nest';
   document.querySelector('#endcard .eyebrow').textContent='Nest report';
   promptEl.textContent='Tap to start — then drag worms up into the open beaks!';
-  crosslink.textContent='🐶 Play the agility course →'; crosslink.href='?dog';
 } else if(LEVEL==='panda'){
   phase='pandaIntro';
   for(let i=0;i<PANDA_COUNT;i++) spawnPanda();   // all pandas present on the hill for the intro
@@ -1868,11 +1871,14 @@ if(LEVEL==='nest'){
   ecount.textContent=String(PANDA_COUNT);
   daytagEl.textContent='Panda Hill';
   document.querySelector('#endcard .eyebrow').textContent='Shift report';
-  promptEl.textContent='Tap to start — drag the pandas up past the safety line!';
-  crosslink.textContent='🐦 Play Feed the Nest →'; crosslink.href='?nest';
-} else {
-  crosslink.textContent='🐼 Play Falling Pandas →'; crosslink.href='?panda';
+  promptEl.textContent='Tap to start — keep the clumsy pandas above the line!';
 }
+// dog (?dog) keeps the default 'intro' phase + "Bond energy" HUD.
+// Scorecard: build links to the OTHER levels (not the current one).
+const LEVELS=[{k:'nest',label:'🐦 Feed the Nest'},{k:'dog',label:'🐶 Agility Course'},{k:'panda',label:'🐼 Falling Pandas'}];
+const ml=document.getElementById('morelinks');
+if(ml){ for(const Lv of LEVELS){ if(Lv.k===LEVEL) continue;
+  const a=document.createElement('a'); a.className='morelink'; a.href='?'+Lv.k; a.textContent=Lv.label; ml.appendChild(a); } }
 requestAnimationFrame(frame);
 })();
 </script>

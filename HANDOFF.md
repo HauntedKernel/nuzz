@@ -187,9 +187,10 @@ is on Cloudflare's free tier (D1: 100k writes/day; we use ~3 per play).
 ## LEVELS — the dog, and the bird ("Feed the Nest")
 
 The file now holds **three levels**, chosen at load by URL (`const LEVEL` near the top):
-- **default (`nuzz.pet`) → the bird level, "Feed the Nest"** — the LANDING level as of 2026-06-17.
+- **default (`nuzz.pet`) → "Falling Pandas"** — the LANDING level as of 2026-06-18.
+- **`nuzz.pet/?nest`** → the **bird** level, "Feed the Nest".
 - **`nuzz.pet/?dog`** → the **dog** (cuddle → agility course), described above.
-- **`nuzz.pet/?panda`** → **"Falling Pandas"** (added 2026-06-18): all `PANDA_COUNT` (12) pandas start
+- (Falling Pandas detail:) all `PANDA_COUNT` (12) pandas start
   **bunched, resting on the grassy crest above the `SAFE_LINE`**. Each tips over after a `tipT` timer
   (long at first, shorter as the round ramps) and slides/tumbles **down the hill, slowly then
   accelerating** (`speed=0.5+ramp*1.1`). **Multi-touch drag** the tumblers back up above the line, where
@@ -201,10 +202,12 @@ The file now holds **three levels**, chosen at load by URL (`const LEVEL` near t
   stay up after a rescue), `maxFalling` in `updatePandaLevel` (cap on how many tumble at once, 3→6 over
   the round), `SAFE_LINE`/`DANGER_Y`, thresholds in `endPandaRound()`. Phases: `pandaIntro → panda → pandaEnd`.
 
-Each end card (shared `#endcard`) shows a **cross-link** that cycles **nest → dog → panda → nest**
-(`#crosslink`, set per level at boot) and a **call-to-action** (`#cta`): "Screenshot your scorecard
-and post it on Instagram or TikTok — tag @nuzz.pet to enter to win a gift card." Edit `#cta` to change
-the promo. All three levels emit the same analytics events with their own `level` tag
+Each end card (shared `#endcard`) shows: the **giveaway CTA** (`#cta`: "Screenshot your scorecard and
+post it on Instagram or TikTok — tag @nuzz.pet to enter to win a gift card") and a **"Play the other
+levels"** block (`#more` header + `#morelinks`) that is built at boot with one button per level *other
+than* the current one (`.morelink` → `?nest`/`?dog`/`?panda`). Edit `#cta` to change the promo; the
+links are generated from the `LEVELS` array in the boot block. To change which level is the landing
+page, edit the `const LEVEL` ternary (the final fallback is the landing level). All three levels emit the same analytics events with their own `level` tag
 ('dog' | 'nest' | 'panda'); the nest/panda `run_end` store the verdict tier in `result`.
 
 **Bird mechanic.** Six baby chicks open/close their beaks on ramping rhythms. You **scoop a worm
