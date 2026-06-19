@@ -1,5 +1,11 @@
 # Cloudflare Pages redirects.
 # The aliens prototype lives at /aliens/ (a directory index). Pages resolves /aliens -> /aliens/
-# natively; these just catch the capital-first variants a phone keyboard autocapitalizes to.
+# natively; these catch the variants people actually type: the singular "alien" and the
+# capital-first forms a phone keyboard autocapitalizes to. Without these, the missing path
+# falls through to the SPA shell and shows the panda game instead of the alien prototype.
+/alien     /aliens/   301
+/alien/    /aliens/   301
+/Alien     /aliens/   301
+/Alien/    /aliens/   301
 /Aliens*   /aliens/   301
 /ALIENS*   /aliens/   301
