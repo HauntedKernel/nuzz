@@ -65,6 +65,8 @@
   #strip .links a{display:inline-block;padding:9px 16px;border-radius:22px;background:#fff;color:var(--brand);text-decoration:none;font-weight:bold;font-size:14px;box-shadow:0 3px 0 rgba(58,74,90,.12)}
   #strip .links a:focus-visible{outline:3px solid var(--rose);outline-offset:2px}
   #strip .a2hs{font-size:12px;margin-top:16px;opacity:.6;line-height:1.5}
+  #donate{display:none;margin-top:16px;padding:11px 24px;border-radius:24px;background:var(--brand);color:#fff;text-decoration:none;font-weight:bold;font-size:15px;box-shadow:0 4px 0 rgba(58,74,90,.18)}
+  #donate:focus-visible{outline:3px solid var(--rose);outline-offset:3px}
   /* ---- first-run pet-name prompt ---- */
   #namecard{position:fixed;inset:0;z-index:20;display:none;flex-direction:column;justify-content:center;align-items:center;background:rgba(250,238,218,.97);text-align:center;padding:30px}
   #namecard.show{display:flex}
@@ -116,6 +118,7 @@
     <a href="https://instagram.com/nuzz.pet" target="_blank" rel="noopener">Instagram</a>
     <a href="https://tiktok.com/@nuzz.pet" target="_blank" rel="noopener">TikTok</a>
   </div>
+  <a id="donate" href="#" target="_blank" rel="noopener">☕ Tip the team</a>
   <div class="a2hs">⌂ Add to your home screen for a one-tap daily nuzzle.</div>
 </div>
 <div id="namecard">
@@ -1879,6 +1882,8 @@ const LEVELS=[{k:'nest',label:'🐦 Feed the Nest'},{k:'dog',label:'🐶 Agility
 const ml=document.getElementById('morelinks');
 if(ml){ for(const Lv of LEVELS){ if(Lv.k===LEVEL) continue;
   const a=document.createElement('a'); a.className='morelink'; a.href='?'+Lv.k; a.textContent=Lv.label; ml.appendChild(a); } }
+const DONATE_URL = '';   // <-- paste your Ko-fi / Buy Me a Coffee / Stripe link here to reveal the "Tip the team" button
+if(DONATE_URL){ const d=document.getElementById('donate'); if(d){ d.href=DONATE_URL; d.style.display='inline-block'; } }
 requestAnimationFrame(frame);
 })();
 </script>
