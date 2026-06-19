@@ -1,0 +1,20 @@
+# Standalone realtime Worker for Nuzz co-op (matchmaking + message relay over WebSockets).
+# Separate from the Pages project on purpose: Durable Objects deploy cleanest as their own Worker.
+# The game (nuzz.pet) opens a WebSocket to this Worker's URL; no custom domain required to start.
+name = "nuzz-rooms"
+main = "src/index.js"
+compatibility_date = "2025-01-01"
+
+# Lobby = one global instance that pairs waiting players. Room = one instance per match, relays
+# messages between the two players. new_sqlite_classes keeps us on the FREE Durable Objects tier.
+[[durable_objects.bindings]]
+name = "LOBBY"
+class_name = "Lobby"
+
+[[durable_objects.bindings]]
+name = "ROOMS"
+class_name = "Room"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Lobby", "Room"]
