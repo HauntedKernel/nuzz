@@ -1,0 +1,5 @@
+# Cloudflare Pages redirects.
+# The aliens prototype lives at /aliens/ (a directory index). Pages resolves /aliens -> /aliens/
+# natively; these just catch the capital-first variants a phone keyboard autocapitalizes to.
+/Aliens*   /aliens/   301
+/ALIENS*   /aliens/   301
