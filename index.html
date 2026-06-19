@@ -1882,7 +1882,7 @@ const LEVELS=[{k:'nest',label:'🐦 Feed the Nest'},{k:'dog',label:'🐶 Agility
 const ml=document.getElementById('morelinks');
 if(ml){ for(const Lv of LEVELS){ if(Lv.k===LEVEL) continue;
   const a=document.createElement('a'); a.className='morelink'; a.href='?'+Lv.k; a.textContent=Lv.label; ml.appendChild(a); } }
-const DONATE_URL = '';   // <-- paste your Ko-fi / Buy Me a Coffee / Stripe link here to reveal the "Tip the team" button
+const DONATE_URL = 'https://ko-fi.com/nuzzgame';   // Ko-fi tip jar — reveals the "Tip the team" button
 if(DONATE_URL){ const d=document.getElementById('donate'); if(d){ d.href=DONATE_URL; d.style.display='inline-block'; } }
 requestAnimationFrame(frame);
 })();
