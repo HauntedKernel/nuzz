@@ -1,5 +1,12 @@
 # Defend the Cows from Aliens
 
+> **🛸 PLAYABLE PROTOTYPE (2026-06-18): `nuzz.pet/aliens`** — the *flashlight* variant, built in
+> **PixiJS v7 (WebGL)** as a standalone file (`aliens.html`, loads Pixi from CDN, separate from the
+> main game). Dark night pasture, grazing cows/sheep/chickens, UFOs descend with glowing tractor
+> beams; sweep a flashlight onto a UFO to break its beam and drive it off. 60s round → farmer verdict.
+> This is the "see the WebGL jump" demo (additive glow / lighting / particles). Not wired into the
+> main `index.html` level system yet.
+
 **One-liner:** UFOs try to abduct cows with tractor beams; you yank the cows back down to the field.
 
 **Core verb:** drag-to-rescue — the same drag we use everywhere, but *inverted* from Falling Pandas
