@@ -25,6 +25,8 @@
   #start button{font-family:inherit;font-size:18px;font-weight:bold;color:#0a0e1f;background:#ffd95e;border:none;border-radius:28px;padding:15px 40px;cursor:pointer;box-shadow:0 5px 0 #c9a93f}
   #start button:active{transform:translateY(3px);box-shadow:0 2px 0 #c9a93f}
   #tiltNote{margin-top:16px;font-size:12px;opacity:.5;max-width:280px;line-height:1.4}
+  #startWorld{margin-top:22px;font-size:14px;font-weight:bold;color:#9fe8c0;min-height:18px;max-width:300px;line-height:1.4}
+  #endWorld{font-size:14.5px;font-weight:bold;color:#9fe8c0;margin-bottom:18px;min-height:18px}
 </style>
 </head>
 <body>
@@ -32,13 +34,14 @@
 <div id="hud"><div>🐄 Herd: <span id="herd">0</span></div><div class="lost">👽 Lost: <span id="lost">0</span></div><div>⏱ <span id="time">60</span></div></div>
 <div id="hint">Sweep your flashlight onto the UFOs to break their beams!</div>
 <div id="proto">PROTOTYPE · PixiJS / WebGL</div>
-<div id="end"><h2 id="endTitle">🚜</h2><p id="endBlurb"></p><button onclick="location.reload()">Play again</button></div>
+<div id="end"><h2 id="endTitle">🚜</h2><p id="endBlurb"></p><div id="endWorld"></div><button onclick="location.reload()">Play again</button></div>
 <div id="err">Couldn't load the graphics engine (PixiJS CDN). Check your connection and reload.</div>
 <div id="start">
   <h2>👽 Defend the Herd</h2>
   <p id="startBlurb">Aim your flashlight and sweep the beam over the UFOs to break their tractor beams before they abduct your herd.</p>
   <button id="startBtn">Start</button>
   <div id="tiltNote"></div>
+  <div id="startWorld"></div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/pixi.js@7/dist/pixi.min.js"></script>
@@ -192,7 +195,13 @@ function burst(x,y,n,color){ for(let i=0;i<n;i++){ const p=new PIXI.Graphics();
   parts.push({gfx:p,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:1}); } }
 
 /* ---- state ---- */
-let lost=0, timeLeft=60*60, ended=false, t=0, started=false;   // timeLeft in frames (60s)
+let lost=0, repelled=0, timeLeft=60*60, ended=false, t=0, started=false;   // timeLeft in frames (60s)
+
+/* ---- global community counters (shared "saved worldwide" totals via /api/stats) ---- */
+function fmtNum(n){ try{ return (n||0).toLocaleString(); }catch(e){ return ''+(n||0); } }
+function fetchStats(cb){ try{
+  fetch('/api/stats?t='+Date.now()).then(function(r){return r.json();}).then(cb).catch(function(){});
+}catch(e){} }
 const herdEl=document.getElementById('herd'), lostEl=document.getElementById('lost'), timeEl=document.getElementById('time');
 let spawnT=120;
 track('open');
@@ -207,6 +216,13 @@ track('open');
   document.getElementById('tiltNote').textContent = touch
     ? "Hold the phone however's comfy — that becomes center." : "";
   btn.textContent = touch ? "Tap to start" : "Start";
+
+  // show the shared worldwide tally so players see they're joining a running total
+  fetchStats(function(s){
+    if(s && s.animals_saved!=null)
+      document.getElementById('startWorld').textContent =
+        '🌍 ' + fmtNum(s.animals_saved) + ' animals saved worldwide so far — add to the count.';
+  });
 
   function begin(){
     started=true; startEl.style.display='none';
@@ -236,7 +252,18 @@ function endGame(){
   document.getElementById('endTitle').textContent=title;
   document.getElementById('endBlurb').textContent=blurb+'  ('+left+' saved · '+lost+' taken)';
   end.style.display='flex';
-  track('run_end',{result:(lost===0?'perfect':lost<=2?'good':lost<=5?'ok':'rough'),lost:lost,saved:left});
+  // log the run AND add this run's tallies to the shared worldwide counters (inc:{...})
+  track('run_end',{
+    result:(lost===0?'perfect':lost<=2?'good':lost<=5?'ok':'rough'),
+    lost:lost, saved:left, ufos:repelled,
+    inc:{ animals_saved:left, animals_lost:lost, ufos_repelled:repelled, alien_runs:1 }
+  });
+  // then pull the fresh global total so the player sees their contribution land
+  setTimeout(function(){ fetchStats(function(s){
+    if(s && s.animals_saved!=null)
+      document.getElementById('endWorld').textContent =
+        '🌍 ' + fmtNum(s.animals_saved) + ' animals saved worldwide — and counting.';
+  }); }, 700);
 }
 
 /* ---- main loop (PixiJS ticker — delta is ~1 at 60fps, so motion is frame-rate independent) ---- */
@@ -290,6 +317,7 @@ app.ticker.add((delta)=>{
     const dx=flashlight.x-u.x, dy=flashlight.y-u.y;
     if(Math.hypot(dx,dy)<LIGHT_R){ u.hp-=0.012*delta; u.hit=1;
       if(u.hp<=0){ // driven off!
+        repelled++;
         burst(u.x,u.y,22,0x8ff0ff); burst(u.x,u.y,10,0xffffff);
         if(u.target){ u.target.state='falling'; u.target.ufo=null; u.target=null; }
         u.beaming=false; u.leaving=true; } }

@@ -22,6 +22,21 @@ export async function onRequestPost(context) {
     await env.DB.prepare(
       'INSERT INTO events (ts, aid, ev, reached, result, banked, country, data) VALUES (?,?,?,?,?,?,?,?)'
     ).bind(Date.now(), aid, ev, reached, result, banked, country, data).run();
+
+    // Global community counters: the game sends inc:{name:delta,...}. We only apply names on the
+    // allowlist and clamp each delta, so a tampered beacon can't invent counters or spike them.
+    // (counters is a live cache; it can be re-derived from events — see tools/schema.sql.)
+    if (b.inc && typeof b.inc === 'object') {
+      const ALLOW = new Set(['animals_saved','animals_lost','ufos_repelled','alien_runs','nuzz_runs']);
+      for (const k of Object.keys(b.inc)) {
+        if (!ALLOW.has(k)) continue;
+        const d = Math.max(0, Math.min(1000, Math.trunc(Number(b.inc[k]) || 0)));
+        if (!d) continue;
+        await env.DB.prepare(
+          'INSERT INTO counters (name, value) VALUES (?, ?) ON CONFLICT(name) DO UPDATE SET value = value + excluded.value'
+        ).bind(k, d).run();
+      }
+    }
   } catch (e) {
     // swallow — a dropped analytics beacon must not affect anyone playing
   }

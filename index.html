@@ -1182,7 +1182,7 @@ function finishCourse(){
   document.getElementById('stamp').textContent='★ CHAPTER 1 — '+title.replace('!','').toUpperCase()+' ★';
   document.querySelector('#endcard p:last-of-type').textContent='Come back tomorrow for another little nuzzle.';
   saveProgress();
-  track('run_end',{level:'dog',result:'finish',reached:COURSE_HURDLES,banked:courseBanked,
+  track('run_end',{inc:{nuzz_runs:1},level:'dog',result:'finish',reached:COURSE_HURDLES,banked:courseBanked,
     grade:ribbon,cleared:clearedCount,perfects:perfectCount,combo:bestCombo,left:energy});
   setTimeout(()=>{endcard.style.display='flex';},900);
 }
@@ -1201,7 +1201,7 @@ function failCourse(){
   document.getElementById('stamp').textContent='★ SO CLOSE — TRY AGAIN ★';
   document.querySelector('#endcard p:last-of-type').textContent='Tip: 2 spots at once is worth far more than two single scratches.';
   saveProgress();
-  track('run_end',{level:'dog',result:'fail',reached:hurdlesPassed,banked:courseBanked,
+  track('run_end',{inc:{nuzz_runs:1},level:'dog',result:'fail',reached:hurdlesPassed,banked:courseBanked,
     cleared:clearedCount,perfects:perfectCount,combo:bestCombo,left:0});
   setTimeout(()=>{endcard.style.display='flex';},700);
 }
@@ -1419,7 +1419,7 @@ function showNestEnd(){
   bagList.textContent='Fed '+nestFed+' worms · '+nestHappy+'/'+NEST_CHICKS+' chicks full · best combo ×'+bestNestCombo;
   document.getElementById('stamp').textContent=stamp;
   lastP.textContent=last;
-  track('run_end',{level:'nest',result:nestVerdict,reached:nestHappy,banked:nestFed,
+  track('run_end',{inc:{nuzz_runs:1},level:'nest',result:nestVerdict,reached:nestHappy,banked:nestFed,
     fullness:Math.round(nestAvg*100),combo:bestNestCombo});
   nestEnded=true;
   endcard.style.display='flex';
@@ -1681,7 +1681,7 @@ function showPandaEnd(){
   bagList.textContent='Kept on the hill '+pandas.length+' / '+PANDA_COUNT+' · escaped '+pandaEscaped;
   document.getElementById('stamp').textContent=stamp;
   lastP.textContent=last;
-  track('run_end',{level:'panda',result:pandaVerdict,reached:pandas.length,banked:pandaEscaped,combo:0});
+  track('run_end',{inc:{nuzz_runs:1},level:'panda',result:pandaVerdict,reached:pandas.length,banked:pandaEscaped,combo:0});
   pandaEnded=true; endcard.style.display='flex';
 }
 function resetPanda(){
