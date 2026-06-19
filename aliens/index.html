@@ -19,6 +19,12 @@
   #end p{max-width:330px;line-height:1.5;font-size:15px;margin-bottom:18px;opacity:.92}
   #end button{font-family:inherit;font-size:17px;font-weight:bold;color:#0a0e1f;background:#ffd95e;border:none;border-radius:26px;padding:13px 32px;cursor:pointer;box-shadow:0 5px 0 #c9a93f}
   #err{position:fixed;inset:0;display:none;justify-content:center;align-items:center;text-align:center;padding:30px;z-index:20;font-size:15px;line-height:1.6}
+  #start{position:fixed;inset:0;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:30px;background:radial-gradient(circle at 50% 38%,#16204a,#0a0e1f 75%);z-index:15}
+  #start h2{font-size:30px;margin-bottom:14px;text-shadow:0 3px 0 rgba(0,0,0,.4)}
+  #start p{max-width:330px;line-height:1.5;font-size:15.5px;margin-bottom:24px;opacity:.92}
+  #start button{font-family:inherit;font-size:18px;font-weight:bold;color:#0a0e1f;background:#ffd95e;border:none;border-radius:28px;padding:15px 40px;cursor:pointer;box-shadow:0 5px 0 #c9a93f}
+  #start button:active{transform:translateY(3px);box-shadow:0 2px 0 #c9a93f}
+  #tiltNote{margin-top:16px;font-size:12px;opacity:.5;max-width:280px;line-height:1.4}
 </style>
 </head>
 <body>
@@ -28,6 +34,12 @@
 <div id="proto">PROTOTYPE · PixiJS / WebGL</div>
 <div id="end"><h2 id="endTitle">🚜</h2><p id="endBlurb"></p><button onclick="location.reload()">Play again</button></div>
 <div id="err">Couldn't load the graphics engine (PixiJS CDN). Check your connection and reload.</div>
+<div id="start">
+  <h2>👽 Defend the Herd</h2>
+  <p id="startBlurb">Aim your flashlight and sweep the beam over the UFOs to break their tractor beams before they abduct your herd.</p>
+  <button id="startBtn">Start</button>
+  <div id="tiltNote"></div>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/pixi.js@7/dist/pixi.min.js"></script>
 <script>
@@ -157,6 +169,21 @@ function setLight(e){ pointerActive=true; flashlight.x=e.clientX; flashlight.y=e
 window.addEventListener('pointermove',setLight);
 window.addEventListener('pointerdown',setLight);
 
+/* ---- tilt control: phone orientation aims the flashlight ----
+   gamma = left/right lean, beta = forward/back lean. We capture the first reading as
+   "center" (recenter) so the player can hold the phone at any comfortable angle, then a
+   ~25° lean sweeps edge-to-edge. Pointer/mouse stays live as a fallback (desktop, no sensor). */
+let tiltOn=false, baseG=null, baseB=null, tiltTX=null, tiltTY=null;
+function onTilt(e){
+  if(e.gamma==null || e.beta==null) return;
+  if(baseG==null){ baseG=e.gamma; baseB=e.beta; }      // calibrate to wherever it's held
+  const sx=(S.width/2)/25, sy=(S.height/2)/20;
+  tiltTX=Math.max(0,Math.min(S.width,  S.width/2    + (e.gamma-baseG)*sx));
+  tiltTY=Math.max(0,Math.min(S.height, S.height*0.55+ (e.beta -baseB)*sy));
+  pointerActive=true;
+  const h=document.getElementById('hint'); if(h) h.style.opacity=0;
+}
+
 /* ---- particles ---- */
 const parts=[];
 function burst(x,y,n,color){ for(let i=0;i<n;i++){ const p=new PIXI.Graphics();
@@ -165,10 +192,38 @@ function burst(x,y,n,color){ for(let i=0;i<n;i++){ const p=new PIXI.Graphics();
   parts.push({gfx:p,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:1}); } }
 
 /* ---- state ---- */
-let lost=0, timeLeft=60*60, ended=false, t=0;   // timeLeft in frames (60s)
+let lost=0, timeLeft=60*60, ended=false, t=0, started=false;   // timeLeft in frames (60s)
 const herdEl=document.getElementById('herd'), lostEl=document.getElementById('lost'), timeEl=document.getElementById('time');
 let spawnT=120;
-track('start');
+track('open');
+
+/* ---- start overlay: tap to begin (and, on iOS, to grant motion permission) ---- */
+(function(){
+  const touch = navigator.maxTouchPoints>0 || 'ontouchstart' in window;
+  const startEl=document.getElementById('start'), btn=document.getElementById('startBtn');
+  document.getElementById('startBlurb').textContent = touch
+    ? "Tilt your phone to aim your flashlight — sweep the beam over the UFOs to break their tractor beams before they abduct your herd."
+    : "Move your mouse to aim your flashlight — sweep the beam over the UFOs to break their tractor beams before they abduct your herd.";
+  document.getElementById('tiltNote').textContent = touch
+    ? "Hold the phone however's comfy — that becomes center." : "";
+  btn.textContent = touch ? "Tap to start" : "Start";
+
+  function begin(){
+    started=true; startEl.style.display='none';
+    track('start',{tilt:tiltOn, ctrl:tiltOn?'tilt':'pointer'});
+  }
+  btn.addEventListener('click',function(){
+    const DOE=window.DeviceOrientationEvent;
+    if(DOE && typeof DOE.requestPermission==='function'){   // iOS 13+ : needs this user gesture
+      DOE.requestPermission().then(function(res){
+        if(res==='granted'){ window.addEventListener('deviceorientation',onTilt); tiltOn=true; }
+        begin();
+      }).catch(begin);
+    } else if(DOE){                                          // Android / others : just listen
+      window.addEventListener('deviceorientation',onTilt); tiltOn=true; begin();
+    } else { begin(); }                                     // no sensor : pointer fallback
+  });
+})();
 
 function endGame(){
   ended=true;
@@ -188,16 +243,19 @@ function endGame(){
 app.ticker.add((delta)=>{
   if(ended) return;
   t+=delta;
-  timeLeft-=delta; if(timeLeft<=0){ timeLeft=0; endGame(); }
+  // clock + UFO spawns only run once the player has tapped Start (attract mode grazes behind the overlay)
+  if(started){
+    timeLeft-=delta; if(timeLeft<=0){ timeLeft=0; endGame(); }
+    spawnT-=delta;
+    if(spawnT<=0 && ufos.length<5){ makeUfo(); spawnT=90+Math.random()*120 - (60-timeLeft/60)*1.4; }
+  }
   timeEl.textContent=Math.ceil(timeLeft/60);
   herdEl.textContent=animals.length; lostEl.textContent=lost;
 
-  // spawn UFOs over time, faster as the clock runs down
-  spawnT-=delta;
-  if(spawnT<=0 && ufos.length<5){ makeUfo(); spawnT=90+Math.random()*120 - (60-timeLeft/60)*1.4; }
-
   // flashlight idle bob if untouched
   if(!pointerActive){ flashlight.x=S.width/2+Math.sin(t*0.02)*60; flashlight.y=S.height*0.55; }
+  // tilt aiming: ease toward the orientation target (smooths sensor jitter)
+  if(tiltOn && tiltTX!=null){ flashlight.x+=(tiltTX-flashlight.x)*0.25; flashlight.y+=(tiltTY-flashlight.y)*0.25; }
   flashlight.rotation=Math.sin(t*0.1)*0.04;
   core.alpha=0.7+Math.sin(t*0.3)*0.2;
 
