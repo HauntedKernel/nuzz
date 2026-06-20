@@ -19,6 +19,8 @@
   #lobby p{max-width:330px;line-height:1.5;font-size:15.5px;margin-bottom:24px;opacity:.92}
   #lobby button{font-family:inherit;font-size:18px;font-weight:bold;color:#0a0e1f;background:#ffd95e;border:none;border-radius:28px;padding:15px 36px;cursor:pointer;box-shadow:0 5px 0 #c9a93f}
   #lobby button:active{transform:translateY(3px);box-shadow:0 2px 0 #c9a93f}
+  #lobby button.ghost{background:transparent;color:#bcd2ff;box-shadow:none;border:2px solid rgba(188,210,255,.45);font-size:15px;padding:11px 26px;margin-top:14px}
+  #lobby button.ghost:active{transform:translateY(2px)}
   #status{font-size:16px;font-weight:bold;min-height:22px;margin-bottom:18px;color:#9fe8c0}
   .dots::after{content:'';animation:dots 1.2s steps(4,end) infinite}
   @keyframes dots{0%{content:''}25%{content:'.'}50%{content:'..'}75%{content:'...'}}
@@ -44,6 +46,7 @@
   <p id="lobbyBlurb">Team up with another player anywhere in the world to defend the same herd. Your flashlight is gold, your partner's is blue.</p>
   <div id="status"></div>
   <button id="findBtn">🌐 Find a partner</button>
+  <br><button id="botBtn" class="ghost">🤖 Practice with a bot</button>
   <div id="lobbyNote"></div>
 </div>
 <div id="end"><h2 id="endTitle">🚜</h2><p id="endBlurb"></p><div class="row"><button id="againBtn">Find another partner</button><button class="ghost" onclick="location.href='/aliens/'">Play solo</button></div></div>
@@ -177,6 +180,7 @@ function burst(x,y,n,color){ for(let i=0;i<n;i++){ const p=new PIXI.Graphics();
 
 /* ================= NETWORKING ================= */
 let role=null, ws=null, started=false, ended=false, t=0;
+let botGame=false, botTargetId=null, botRepick=0;   // declared early: ?bot=1 starts a bot game during parse
 const herdEl=document.getElementById('herd'), lostEl=document.getElementById('lost'), timeEl=document.getElementById('time');
 const lobby=document.getElementById('lobby'), statusEl=document.getElementById('status'), findBtn=document.getElementById('findBtn');
 
@@ -186,28 +190,50 @@ const touch = navigator.maxTouchPoints>0 || 'ontouchstart' in window;
 document.getElementById('lobbyNote').textContent = touch ? "Tilt your phone to aim — hold it however's comfy." : "Move your mouse to aim your flashlight.";
 findBtn.textContent = touch ? "🌐 Tap to find a partner" : "🌐 Find a partner";
 
-findBtn.addEventListener('click', function(){
-  findBtn.style.display='none';
-  // ask iOS for motion permission on this gesture, then start matchmaking
+// ask iOS for motion permission on the tap gesture, then run cb
+function withMotion(cb){
   const DOE=window.DeviceOrientationEvent;
   if(DOE && typeof DOE.requestPermission==='function'){
-    DOE.requestPermission().then(function(r){ if(r==='granted'){ window.addEventListener('deviceorientation',onTilt); tiltOn=true; } findPartner(); }).catch(findPartner);
-  } else if(DOE){ window.addEventListener('deviceorientation',onTilt); tiltOn=true; findPartner(); }
-  else findPartner();
-});
+    DOE.requestPermission().then(function(r){ if(r==='granted'){ window.addEventListener('deviceorientation',onTilt); tiltOn=true; } cb(); }).catch(cb);
+  } else if(DOE){ window.addEventListener('deviceorientation',onTilt); tiltOn=true; cb(); }
+  else cb();
+}
+function hideLobbyButtons(){ findBtn.style.display='none'; document.getElementById('botBtn').style.display='none'; }
+findBtn.addEventListener('click', function(){ hideLobbyButtons(); withMotion(findPartner); });
+document.getElementById('botBtn').addEventListener('click', function(){ hideLobbyButtons(); withMotion(startBotGame); });
+// demo shortcut: /aliens/coop/?bot=1 drops straight into a bot match
+if(/[?&]bot=1(\b|$)/.test(location.search)){ hideLobbyButtons(); withMotion(startBotGame); }
 
+const BOT_TIMEOUT=7000;   // if no human turns up this fast, bring in a bot so nobody waits alone
+let matchTimer=null;
 function findPartner(){
   setStatus('Looking for a partner',true);
   track('find');
   let lobbyWS;
   try{ lobbyWS=new WebSocket(ROOMS+'/find'); }
-  catch(e){ setStatus('Connection blocked. Try again.'); findBtn.style.display=''; return; }
+  catch(e){ startBotGame(); return; }
   lobbyWS.onmessage=function(ev){
     let m; try{ m=JSON.parse(ev.data); }catch(e){ return; }
-    if(m.type==='matched'){ role=m.role; lobbyWS.close(); joinRoom(m.roomId); }
+    if(m.type==='matched'){ clearTimeout(matchTimer); role=m.role; lobbyWS.close(); joinRoom(m.roomId); }
   };
-  lobbyWS.onerror=function(){ setStatus('Couldn\'t reach the matchmaker. Tap to retry.'); findBtn.style.display=''; };
-  lobbyWS.onclose=function(){ if(!role && !ws){ /* closed before match */ } };
+  lobbyWS.onerror=function(){ clearTimeout(matchTimer); if(!role && !ws && !botGame) startBotGame(); };
+  matchTimer=setTimeout(function(){
+    if(role || ws || botGame) return;                 // a human matched in time
+    try{ lobbyWS.close(); }catch(e){}
+    setStatus('No one around right now — bringing in a bot 🤖');
+    setTimeout(startBotGame, 800);
+  }, BOT_TIMEOUT);
+}
+
+function startBotGame(){
+  if(started || ended || botGame) return;
+  clearTimeout(matchTimer);
+  role='host'; botGame=true;
+  setStatus('Teaming you up with a bot 🤖');
+  setTimeout(function(){
+    lobby.style.display='none'; started=true; partnerFlash.visible=true;
+    hostInit(); track('start',{role:'host',bot:1});
+  }, 700);
 }
 
 function joinRoom(roomId){
@@ -246,6 +272,32 @@ function partnerGone(reason){
 let animals=[], ufos=[], lost=0, repelled=0, timeLeft=60*60, spawnT=120, nextId=1;
 const guestAim={x:S.width/2, y:S.height*0.6};
 
+// Bot teammate: drives the partner (blue) flashlight. Picks the most-threatening UFO the human
+// ISN'T already covering, eases toward it (capped speed + jitter so it reads as a person, not a
+// cursor snap), and idles over the herd when the sky is clear. Runs only on the host, which has
+// the full sim — so the bot "sees" everything fairly.
+function botUpdate(delta){
+  botRepick-=delta;
+  const alive=ufos.filter(u=>!u.leaving);
+  if(botRepick<=0 || !alive.some(u=>u.id===botTargetId)){
+    botRepick=16+Math.random()*16;                       // re-pick a few times a second
+    let best=null,bestScore=-1e9;
+    for(const u of alive){
+      const humanNear=Math.hypot(myFlash.x-u.x,myFlash.y-u.y)<LIGHT_R*1.1;
+      const score=(u.beaming?120:0)+(u.target?40:0)+(1-u.hp)*30-(humanNear?90:0)-u.y*0.03;
+      if(score>bestScore){ bestScore=score; best=u; }
+    }
+    botTargetId=best?best.id:null;
+  }
+  const tgt=ufos.find(u=>u.id===botTargetId && !u.leaving);
+  let dx,dy;
+  if(tgt){ dx=tgt.x-guestAim.x; dy=tgt.y-guestAim.y; }
+  else { dx=S.width/2-guestAim.x; dy=(groundY-90)-guestAim.y; }   // idle near the herd
+  const d=Math.hypot(dx,dy)||1, sp=Math.min(6.5*delta,d);
+  guestAim.x=Math.max(0,Math.min(S.width,  guestAim.x+dx/d*sp+Math.sin(t*0.20)*0.7));
+  guestAim.y=Math.max(0,Math.min(S.height, guestAim.y+dy/d*sp+Math.cos(t*0.17)*0.7));
+}
+
 function hostMakeAnimal(type){
   const g=makeAnimalGfx(type); const id=nextId++;
   const a={id:id, gfx:g, type:type, x:40+Math.random()*(S.width-80), y:groundY-12,
@@ -275,7 +327,7 @@ function hostEnd(){
   else { title='🛸 Rough night'; blurb="The pasture's looking thin. Somewhere a UFO is very full of your livestock."; }
   blurb += '  ('+left+' saved · '+lost+' taken)';
   // host owns the shared run: log it once + add to the worldwide counters
-  track('run_end',{role:'host',result:(lost===0?'perfect':lost<=2?'good':lost<=5?'ok':'rough'),lost:lost,saved:left,ufos:repelled,
+  track('run_end',{role:'host',bot:botGame?1:0,result:(lost===0?'perfect':lost<=2?'good':lost<=5?'ok':'rough'),lost:lost,saved:left,ufos:repelled,
     inc:{animals_saved:left,animals_lost:lost,ufos_repelled:repelled,alien_runs:1}});
   sendNet({type:'end',title:title,blurb:blurb});
   showEnd(title,blurb);
@@ -330,7 +382,8 @@ app.ticker.add(function(delta){
   }
 
   /* ---------- HOST: run the authoritative sim ---------- */
-  // partner (guest) flashlight rendered at last reported aim
+  if(botGame) botUpdate(delta);                 // bot drives the partner aim
+  // partner flashlight rendered at the guest's (or bot's) last aim
   partnerFlash.x=guestAim.x; partnerFlash.y=guestAim.y;
 
   timeLeft-=delta; if(timeLeft<=0){ timeLeft=0; hostEnd(); return; }
@@ -370,9 +423,9 @@ app.ticker.add(function(delta){
     u.gfx.scale.set(1+u.hit*0.06);
   }
 
-  // broadcast snapshot (~15Hz)
+  // broadcast snapshot (~15Hz) — skipped entirely in a bot game (no socket)
   netT+=delta;
-  if(netT>=4){ netT=0;
+  if(ws && netT>=4){ netT=0;
     sendNet({ type:'s', hd:animals.length, ls:lost, tm:Math.ceil(timeLeft/60),
       me:[Math.round(myFlash.x),Math.round(myFlash.y)],
       an:animals.map(a=>[a.id, Math.round(a.gfx.x), Math.round(a.gfx.y), TYPES.indexOf(a.type), a.state==='lifting'?1:0]),
