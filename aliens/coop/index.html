@@ -187,6 +187,14 @@ const lobby=document.getElementById('lobby'), statusEl=document.getElementById('
 
 function setStatus(txt,spin){ statusEl.innerHTML = txt + (spin?'<span class="dots"></span>':''); }
 
+/* ---- keep the screen awake while playing (tilt-aiming isn't a "touch", so phones sleep) ---- */
+let wakeLock=null;
+async function keepAwake(){ try{ if('wakeLock' in navigator){ wakeLock=await navigator.wakeLock.request('screen');
+  if(wakeLock&&wakeLock.addEventListener) wakeLock.addEventListener('release',function(){ wakeLock=null; }); } }catch(e){} }
+document.addEventListener('visibilitychange',function(){
+  if(document.visibilityState==='visible' && started && !ended && !wakeLock) keepAwake();
+});
+
 const touch = navigator.maxTouchPoints>0 || 'ontouchstart' in window;
 document.getElementById('lobbyNote').textContent = touch ? "Tilt your phone to aim — hold it however's comfy." : "Move your mouse to aim your flashlight.";
 findBtn.textContent = touch ? "🌐 Tap to find a partner" : "🌐 Find a partner";
@@ -232,7 +240,7 @@ function startBotGame(){
   role='host'; botGame=true;
   setStatus('Teaming you up with a bot 🤖');
   setTimeout(function(){
-    lobby.style.display='none'; started=true; partnerFlash.visible=true;
+    lobby.style.display='none'; started=true; partnerFlash.visible=true; keepAwake();
     hostInit(); track('start',{role:'host',bot:1});
   }, 700);
 }
@@ -258,7 +266,7 @@ function onRoomMsg(ev){
 }
 
 function beginMatch(){
-  lobby.style.display='none'; started=true; partnerFlash.visible=true;
+  lobby.style.display='none'; started=true; partnerFlash.visible=true; keepAwake();
   track('start',{role:role});
   if(role==='host'){ hostInit(); }
   else { setStatus(''); }   // guest waits for first snapshot
@@ -284,7 +292,7 @@ function botUpdate(delta){
   botRepick-=delta;
   const alive=ufos.filter(u=>!u.leaving);
   if(botRepick<=0 || !alive.some(u=>u.id===botTargetId)){
-    botRepick=26+Math.random()*26;                       // slow, human decision cadence (~0.45–0.85s)
+    botRepick=30+Math.random()*28;                       // slow, human decision cadence
     if(Math.random()<0.12){ botHesitate=14+Math.random()*22; botTargetId=null; return; }   // sometimes hesitate
     let best=null,bestScore=-1e9;
     for(const u of alive){
@@ -299,7 +307,7 @@ function botUpdate(delta){
   let dx,dy;
   if(tgt){ dx=tgt.x-guestAim.x; dy=tgt.y-guestAim.y; }
   else { dx=S.width/2-guestAim.x; dy=(groundY-90)-guestAim.y; }   // idle near the herd
-  const d=Math.hypot(dx,dy)||1, sp=Math.min(3.8*delta,d);        // slower hand: can't be everywhere
+  const d=Math.hypot(dx,dy)||1, sp=Math.min(3.1*delta,d);        // slower hand: can't be everywhere
   guestAim.x=Math.max(0,Math.min(S.width,  guestAim.x+dx/d*sp+Math.sin(t*0.20)*0.8));
   guestAim.y=Math.max(0,Math.min(S.height, guestAim.y+dy/d*sp+Math.cos(t*0.17)*0.8));
 }
@@ -310,9 +318,19 @@ function hostMakeAnimal(type){
            vx:(Math.random()<0.5?-1:1)*(0.2+Math.random()*0.3), state:'graze', wob:Math.random()*7, ufo:null};
   g.x=a.x; g.y=a.y; L.animal.addChild(g); animals.push(a); return a;
 }
+function pickSpreadTarget(targets){
+  // prefer a target far from where UFOs are already working, so beams spread across the screen
+  if(ufos.length && Math.random()<0.7){
+    let best=targets[0], bd=-1;
+    for(const a of targets){ let nd=1e9; for(const u of ufos) nd=Math.min(nd,Math.abs(u.tx-a.x));
+      nd+=Math.random()*60; if(nd>bd){ bd=nd; best=a; } }
+    return best;
+  }
+  return targets[(Math.random()*targets.length)|0];
+}
 function hostMakeUfo(){
   const targets=animals.filter(a=>a.state==='graze' && !a.ufo); if(!targets.length) return;
-  const tgt=targets[(Math.random()*targets.length)|0];
+  const tgt=pickSpreadTarget(targets);
   const prog = 1 - timeLeft/(60*60);
   const fast = Math.random() < 0.22 + prog*0.45;        // co-op throws more zippers than solo
   const c=makeUfoGfx(fast); c.x=Math.random()*S.width; c.y=-30; L.ufo.addChild(c);
@@ -326,7 +344,7 @@ function hostMakeUfo(){
   tgt.ufo=u; ufos.push(u);
 }
 function hostInit(){
-  for(let i=0;i<8;i++) hostMakeAnimal(TYPES[i%3]);
+  for(let i=0;i<12;i++) hostMakeAnimal(TYPES[i%3]);
   setStatus('');
 }
 
@@ -402,7 +420,7 @@ app.ticker.add(function(delta){
   timeEl.textContent=Math.ceil(timeLeft/60); herdEl.textContent=animals.length; lostEl.textContent=lost;
 
   spawnT-=delta;
-  if(spawnT<=0 && ufos.length<8){ hostMakeUfo(); spawnT=Math.max(30, 52+Math.random()*52 - (60-timeLeft/60)*1.9); }
+  if(spawnT<=0 && ufos.length<9){ hostMakeUfo(); spawnT=Math.max(28, 48+Math.random()*50 - (60-timeLeft/60)*1.9); }
 
   for(let i=animals.length-1;i>=0;i--){ const a=animals[i];
     if(a.state==='graze'){ a.x+=a.vx*delta; if(a.x<24||a.x>S.width-24) a.vx*=-1;
