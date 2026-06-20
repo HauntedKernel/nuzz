@@ -2,6 +2,17 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<script>
+/* FEATURED LANDING GAME — the bare homepage (nuzz.pet) opens the newest game.
+   • Update FEATURED when a new level becomes the latest one to show off.
+   • Set FEATURED='' to make the petting game itself the landing again.
+   Specific deep links are untouched — /aliens, /?dog, /?nest, /?panda always reach that exact
+   game — so an old social post still lands on the game it linked, even once it's no longer new. */
+(function(){ var FEATURED='/aliens/';
+  if(FEATURED && location.search==='' && (location.pathname==='/' || location.pathname==='/index.html'))
+    location.replace(FEATURED);
+})();
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#EF9F27">
 <meta name="description" content="A tiny daily petting game. Just a little bit of petting.">
