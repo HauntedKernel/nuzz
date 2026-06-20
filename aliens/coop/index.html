@@ -39,7 +39,7 @@
 <div id="wrap"></div>
 <a id="back" href="/aliens/">← solo</a>
 <div id="hud"><div>🐄 Herd: <span id="herd">0</span></div><div class="lost">👽 Lost: <span id="lost">0</span></div><div>⏱ <span id="time">60</span></div></div>
-<div id="hint">You + your partner share one herd — sweep your flashlights onto the UFOs!</div>
+<div id="hint">Split up &amp; cover different beams — red zippers dive in fast &amp; low!</div>
 <div id="proto">CO-OP PROTOTYPE · two players, one herd</div>
 <div id="lobby">
   <h2>👽 Defend the Herd — Co-op</h2>
@@ -137,13 +137,14 @@ function makeAnimalGfx(type){
   }
   return g;
 }
-function makeUfoGfx(){
+function makeUfoGfx(fast){
   const c=new PIXI.Container();
-  const glow=new PIXI.Sprite(TEX_UFO); glow.anchor.set(0.5); glow.scale.set(0.9); glow.y=8; glow.blendMode=PIXI.BLEND_MODES.ADD; c.addChild(glow);
+  const glow=new PIXI.Sprite(TEX_UFO); glow.anchor.set(0.5); glow.scale.set(fast?0.78:0.9); glow.y=8;
+  glow.blendMode=PIXI.BLEND_MODES.ADD; if(fast) glow.tint=0xff7a66; c.addChild(glow);
   const g=new PIXI.Graphics();
-  g.beginFill(0x9fb6c8).drawEllipse(0,0,34,11).endFill();
-  g.beginFill(0xc9dbe8).drawEllipse(0,-7,17,10).endFill();
-  for(let i=-2;i<=2;i++){ g.beginFill(0x6cf0c0).drawCircle(i*12,3,2.4).endFill(); }
+  g.beginFill(fast?0xc88a82:0x9fb6c8).drawEllipse(0,0,fast?28:34,fast?9:11).endFill();
+  g.beginFill(fast?0xf0c2bc:0xc9dbe8).drawEllipse(0,-7,fast?14:17,fast?8:10).endFill();
+  for(let i=-2;i<=2;i++){ g.beginFill(fast?0xffd36c:0x6cf0c0).drawCircle(i*(fast?10:12),3,2.4).endFill(); }
   c.addChild(g); c.lights=g; return c;
 }
 
@@ -180,7 +181,7 @@ function burst(x,y,n,color){ for(let i=0;i<n;i++){ const p=new PIXI.Graphics();
 
 /* ================= NETWORKING ================= */
 let role=null, ws=null, started=false, ended=false, t=0;
-let botGame=false, botTargetId=null, botRepick=0;   // declared early: ?bot=1 starts a bot game during parse
+let botGame=false, botTargetId=null, botRepick=0, botHesitate=0;   // declared early: ?bot=1 starts a bot game during parse
 const herdEl=document.getElementById('herd'), lostEl=document.getElementById('lost'), timeEl=document.getElementById('time');
 const lobby=document.getElementById('lobby'), statusEl=document.getElementById('status'), findBtn=document.getElementById('findBtn');
 
@@ -277,14 +278,19 @@ const guestAim={x:S.width/2, y:S.height*0.6};
 // cursor snap), and idles over the herd when the sky is clear. Runs only on the host, which has
 // the full sim — so the bot "sees" everything fairly.
 function botUpdate(delta){
+  // reaction lag / indecision: every so often it freezes for a beat, drifting in place
+  if(botHesitate>0){ botHesitate-=delta;
+    guestAim.x+=Math.sin(t*0.2)*0.5; guestAim.y+=Math.cos(t*0.17)*0.5; return; }
   botRepick-=delta;
   const alive=ufos.filter(u=>!u.leaving);
   if(botRepick<=0 || !alive.some(u=>u.id===botTargetId)){
-    botRepick=16+Math.random()*16;                       // re-pick a few times a second
+    botRepick=26+Math.random()*26;                       // slow, human decision cadence (~0.45–0.85s)
+    if(Math.random()<0.12){ botHesitate=14+Math.random()*22; botTargetId=null; return; }   // sometimes hesitate
     let best=null,bestScore=-1e9;
     for(const u of alive){
       const humanNear=Math.hypot(myFlash.x-u.x,myFlash.y-u.y)<LIGHT_R*1.1;
-      const score=(u.beaming?120:0)+(u.target?40:0)+(1-u.hp)*30-(humanNear?90:0)-u.y*0.03;
+      // goes for real threats, but the random term means it isn't a perfect optimizer (misses some)
+      const score=(u.beaming?100:0)+(u.target?30:0)+(1-u.hp)*20-(humanNear?70:0)-u.y*0.03+Math.random()*45;
       if(score>bestScore){ bestScore=score; best=u; }
     }
     botTargetId=best?best.id:null;
@@ -293,9 +299,9 @@ function botUpdate(delta){
   let dx,dy;
   if(tgt){ dx=tgt.x-guestAim.x; dy=tgt.y-guestAim.y; }
   else { dx=S.width/2-guestAim.x; dy=(groundY-90)-guestAim.y; }   // idle near the herd
-  const d=Math.hypot(dx,dy)||1, sp=Math.min(6.5*delta,d);
-  guestAim.x=Math.max(0,Math.min(S.width,  guestAim.x+dx/d*sp+Math.sin(t*0.20)*0.7));
-  guestAim.y=Math.max(0,Math.min(S.height, guestAim.y+dy/d*sp+Math.cos(t*0.17)*0.7));
+  const d=Math.hypot(dx,dy)||1, sp=Math.min(3.8*delta,d);        // slower hand: can't be everywhere
+  guestAim.x=Math.max(0,Math.min(S.width,  guestAim.x+dx/d*sp+Math.sin(t*0.20)*0.8));
+  guestAim.y=Math.max(0,Math.min(S.height, guestAim.y+dy/d*sp+Math.cos(t*0.17)*0.8));
 }
 
 function hostMakeAnimal(type){
@@ -307,10 +313,16 @@ function hostMakeAnimal(type){
 function hostMakeUfo(){
   const targets=animals.filter(a=>a.state==='graze' && !a.ufo); if(!targets.length) return;
   const tgt=targets[(Math.random()*targets.length)|0];
-  const c=makeUfoGfx(); c.x=Math.random()*S.width; c.y=-30; L.ufo.addChild(c);
+  const prog = 1 - timeLeft/(60*60);
+  const fast = Math.random() < 0.22 + prog*0.45;        // co-op throws more zippers than solo
+  const c=makeUfoGfx(fast); c.x=Math.random()*S.width; c.y=-30; L.ufo.addChild(c);
   const beam=new PIXI.Graphics(); beam.blendMode=PIXI.BLEND_MODES.ADD; L.beam.addChild(beam);
-  const u={id:nextId++, gfx:c, lights:c.lights, beam:beam, x:c.x, y:c.y, tx:tgt.x, ty:S.height*(0.16+Math.random()*0.12),
-           hp:1, target:tgt, beaming:false, leaving:false, hit:0};
+  const u={id:nextId++, gfx:c, lights:c.lights, beam:beam, x:c.x, y:c.y, tx:tgt.x,
+           ty: fast ? S.height*(0.30+Math.random()*0.10) : S.height*(0.15+Math.random()*0.12),
+           app:  fast ? 0.13 : 0.06,
+           lift: fast ? 1.9  : 1.15,
+           hp:   fast ? 0.85 : 1.15,
+           fast: fast, target:tgt, beaming:false, leaving:false, hit:0};
   tgt.ufo=u; ufos.push(u);
 }
 function hostInit(){
@@ -350,7 +362,7 @@ function applySnapshot(m){
   // ufos (+ their beams)
   const seenU={};
   (m.uf||[]).forEach(function(u){ const id=u[0]; seenU[id]=1; let w=gUfos[id];
-    if(!w){ const c=makeUfoGfx(); L.ufo.addChild(c); const beam=new PIXI.Graphics(); beam.blendMode=PIXI.BLEND_MODES.ADD; L.beam.addChild(beam);
+    if(!w){ const c=makeUfoGfx(u[5]===1); L.ufo.addChild(c); const beam=new PIXI.Graphics(); beam.blendMode=PIXI.BLEND_MODES.ADD; L.beam.addChild(beam);
       w=gUfos[id]={gfx:c,beam:beam}; }
     w.gfx.x=u[1]; w.gfx.y=u[2]; const beaming=u[4]===1;
     w.beam.clear();
@@ -390,13 +402,13 @@ app.ticker.add(function(delta){
   timeEl.textContent=Math.ceil(timeLeft/60); herdEl.textContent=animals.length; lostEl.textContent=lost;
 
   spawnT-=delta;
-  if(spawnT<=0 && ufos.length<6){ hostMakeUfo(); spawnT=80+Math.random()*110 - (60-timeLeft/60)*1.4; }
+  if(spawnT<=0 && ufos.length<8){ hostMakeUfo(); spawnT=Math.max(30, 52+Math.random()*52 - (60-timeLeft/60)*1.9); }
 
   for(let i=animals.length-1;i>=0;i--){ const a=animals[i];
     if(a.state==='graze'){ a.x+=a.vx*delta; if(a.x<24||a.x>S.width-24) a.vx*=-1;
       a.gfx.y=groundY-12+Math.sin(t*0.1+a.wob)*1.2; a.gfx.scale.x=a.vx<0?-1:1; a.gfx.x=a.x; }
     else if(a.state==='lifting'){ a.gfx.x+=Math.sin(t*0.4+a.wob)*0.6; a.gfx.rotation=Math.sin(t*0.3)*0.3;
-      a.gfx.y-=0.55*delta; if(a.ufo && a.gfx.y < a.ufo.y+18){
+      a.gfx.y-=(a.ufo?a.ufo.lift:1.15)*delta; if(a.ufo && a.gfx.y < a.ufo.y+18){
         burst(a.gfx.x,a.gfx.y,14,0xc070ff); L.animal.removeChild(a.gfx); animals.splice(i,1); lost++;
         if(a.ufo){ a.ufo.target=null; a.ufo.beaming=false; a.ufo.leaving=true; } } }
     else if(a.state==='falling'){ a.gfx.rotation*=0.85; a.gfx.y+=2.4*delta;
@@ -406,7 +418,7 @@ app.ticker.add(function(delta){
   for(let i=ufos.length-1;i>=0;i--){ const u=ufos[i]; u.hit*=0.85;
     if(u.leaving){ u.y-=4*delta; u.gfx.y=u.y; u.gfx.alpha-=0.02*delta; u.beam.clear();
       if(u.gfx.y<-60||u.gfx.alpha<=0){ L.ufo.removeChild(u.gfx); L.beam.removeChild(u.beam); ufos.splice(i,1); } continue; }
-    if(!u.beaming){ u.x+=(u.tx-u.x)*0.05*delta; u.y+=(u.ty-u.y)*0.05*delta; u.gfx.x=u.x; u.gfx.y=u.y;
+    if(!u.beaming){ u.x+=(u.tx-u.x)*u.app*delta; u.y+=(u.ty-u.y)*u.app*delta; u.gfx.x=u.x; u.gfx.y=u.y;
       if(Math.abs(u.x-u.tx)<6 && Math.abs(u.y-u.ty)<6){ u.beaming=true; if(u.target) u.target.state='lifting'; } }
     else { u.gfx.x=u.x+Math.sin(t*0.1)*4; }
     u.beam.clear();
@@ -415,7 +427,7 @@ app.ticker.add(function(delta){
     // damage from EITHER flashlight (mine = host aim, partner = guest aim)
     const hitMine = Math.hypot(myFlash.x-u.x, myFlash.y-u.y) < LIGHT_R;
     const hitPartner = Math.hypot(guestAim.x-u.x, guestAim.y-u.y) < LIGHT_R;
-    if(hitMine || hitPartner){ u.hp-=0.012*delta*((hitMine&&hitPartner)?1.8:1); u.hit=1;
+    if(hitMine || hitPartner){ u.hp-=0.018*delta*((hitMine&&hitPartner)?1.3:1); u.hit=1;   // small stack bonus → splitting up beats doubling up
       if(u.hp<=0){ repelled++; burst(u.x,u.y,22,0x8ff0ff); burst(u.x,u.y,10,0xffffff);
         if(u.target){ u.target.state='falling'; u.target.ufo=null; u.target=null; }
         u.beaming=false; u.leaving=true; } }
@@ -429,7 +441,7 @@ app.ticker.add(function(delta){
     sendNet({ type:'s', hd:animals.length, ls:lost, tm:Math.ceil(timeLeft/60),
       me:[Math.round(myFlash.x),Math.round(myFlash.y)],
       an:animals.map(a=>[a.id, Math.round(a.gfx.x), Math.round(a.gfx.y), TYPES.indexOf(a.type), a.state==='lifting'?1:0]),
-      uf:ufos.map(u=>[u.id, Math.round(u.x), Math.round(u.y), Math.round(u.hp*100), u.beaming?1:0]) });
+      uf:ufos.map(u=>[u.id, Math.round(u.x), Math.round(u.y), Math.round(u.hp*100), u.beaming?1:0, u.fast?1:0]) });
   }
 });
 

@@ -33,7 +33,7 @@
 <body>
 <div id="wrap"></div>
 <div id="hud"><div>🐄 Herd: <span id="herd">0</span></div><div class="lost">👽 Lost: <span id="lost">0</span></div><div>⏱ <span id="time">60</span></div></div>
-<div id="hint">Sweep your flashlight onto the UFOs to break their beams!</div>
+<div id="hint">Break the beams before the herd is lifted — red zippers dive in fast & low!</div>
 <div id="proto">PROTOTYPE · PixiJS / WebGL</div>
 <div id="end"><h2 id="endTitle">🚜</h2><p id="endBlurb"></p><div id="endWorld"></div><button onclick="location.reload()">Play again</button></div>
 <div id="err">Couldn't load the graphics engine (PixiJS CDN). Check your connection and reload.</div>
@@ -146,18 +146,27 @@ function makeUfo(){
   const targets=animals.filter(a=>a.state==='graze' && !a.ufo);
   if(!targets.length) return;
   const tgt=targets[(Math.random()*targets.length)|0];
+  // "Zipper" UFOs dive in fast and hover LOW (short lift = little time to react). They get more
+  // common as the round heats up — that's what forces you to juggle several beams at once.
+  const prog = 1 - timeLeft/(60*60);
+  const fast = Math.random() < 0.18 + prog*0.42;
   const c=new PIXI.Container();
-  const glow=new PIXI.Sprite(TEX_UFO); glow.anchor.set(0.5); glow.scale.set(0.9); glow.y=8; glow.blendMode=PIXI.BLEND_MODES.ADD; c.addChild(glow);
+  const glow=new PIXI.Sprite(TEX_UFO); glow.anchor.set(0.5); glow.scale.set(fast?0.78:0.9); glow.y=8;
+  glow.blendMode=PIXI.BLEND_MODES.ADD; if(fast) glow.tint=0xff7a66; c.addChild(glow);
   const g=new PIXI.Graphics();
-  g.beginFill(0x9fb6c8).drawEllipse(0,0,34,11).endFill();
-  g.beginFill(0xc9dbe8).drawEllipse(0,-7,17,10).endFill();
-  for(let i=-2;i<=2;i++){ g.beginFill(0x6cf0c0).drawCircle(i*12,3,2.4).endFill(); }
+  g.beginFill(fast?0xc88a82:0x9fb6c8).drawEllipse(0,0,fast?28:34,fast?9:11).endFill();
+  g.beginFill(fast?0xf0c2bc:0xc9dbe8).drawEllipse(0,-7,fast?14:17,fast?8:10).endFill();
+  for(let i=-2;i<=2;i++){ g.beginFill(fast?0xffd36c:0x6cf0c0).drawCircle(i*(fast?10:12),3,2.4).endFill(); }
   c.addChild(g);
   c.x=Math.random()*S.width; c.y=-30;
   L.ufo.addChild(c);
   const beam=new PIXI.Graphics(); beam.blendMode=PIXI.BLEND_MODES.ADD; L.beam.addChild(beam);
-  const u={ gfx:c, lights:g, beam:beam, x:c.x, y:c.y, tx:tgt.x, ty:S.height*(0.16+Math.random()*0.12),
-            hp:1, target:tgt, beaming:false, dead:false, hit:0 };
+  const u={ gfx:c, lights:g, beam:beam, x:c.x, y:c.y, tx:tgt.x,
+            ty: fast ? S.height*(0.30+Math.random()*0.10) : S.height*(0.15+Math.random()*0.12),
+            app:  fast ? 0.12 : 0.055,    // approach speed (zip in)
+            lift: fast ? 1.8  : 1.1,      // how fast it hauls the animal up
+            hp:   fast ? 0.85 : 1.15,
+            fast: fast, target:tgt, beaming:false, dead:false, hit:0 };
   tgt.ufo=u; ufos.push(u);
 }
 
@@ -276,7 +285,7 @@ app.ticker.add((delta)=>{
   if(started){
     timeLeft-=delta; if(timeLeft<=0){ timeLeft=0; endGame(); }
     spawnT-=delta;
-    if(spawnT<=0 && ufos.length<5){ makeUfo(); spawnT=90+Math.random()*120 - (60-timeLeft/60)*1.4; }
+    if(spawnT<=0 && ufos.length<6){ makeUfo(); spawnT=Math.max(38, 60+Math.random()*60 - (60-timeLeft/60)*1.7); }
   }
   timeEl.textContent=Math.ceil(timeLeft/60);
   herdEl.textContent=animals.length; lostEl.textContent=lost;
@@ -293,7 +302,7 @@ app.ticker.add((delta)=>{
     if(a.state==='graze'){ a.x+=a.vx*delta; if(a.x<24||a.x>S.width-24) a.vx*=-1;
       a.gfx.y=groundY-12+Math.sin(t*0.1+a.wob)*1.2; a.gfx.scale.x=a.vx<0?-1:1; }
     else if(a.state==='lifting'){ a.gfx.x+=Math.sin(t*0.4+a.wob)*0.6; a.gfx.rotation=Math.sin(t*0.3)*0.3;
-      a.gfx.y-=0.55*delta; if(a.ufo && a.gfx.y < a.ufo.y+18){ // abducted
+      a.gfx.y-=(a.ufo?a.ufo.lift:1.1)*delta; if(a.ufo && a.gfx.y < a.ufo.y+18){ // abducted
         burst(a.gfx.x,a.gfx.y,14,0xc070ff); L.animal.removeChild(a.gfx); animals.splice(i,1); lost++;
         if(a.ufo){ a.ufo.target=null; a.ufo.beaming=false; a.ufo.leaving=true; } } }
     else if(a.state==='falling'){ a.gfx.rotation*=0.85; a.gfx.y+=2.4*delta;
@@ -307,7 +316,7 @@ app.ticker.add((delta)=>{
     if(u.leaving || (!u.target && u.beaming===false && u.hp<=0)){ u.y-=4*delta; u.gfx.y=u.y; u.gfx.alpha-=0.02*delta;
       u.beam.clear(); if(u.gfx.y<-60||u.gfx.alpha<=0){ L.ufo.removeChild(u.gfx); L.beam.removeChild(u.beam); ufos.splice(i,1); } continue; }
     // fly to hover spot above target
-    if(!u.beaming){ u.x+=(u.tx-u.x)*0.05*delta; u.y+=(u.ty-u.y)*0.05*delta; u.gfx.x=u.x; u.gfx.y=u.y;
+    if(!u.beaming){ u.x+=(u.tx-u.x)*u.app*delta; u.y+=(u.ty-u.y)*u.app*delta; u.gfx.x=u.x; u.gfx.y=u.y;
       if(Math.abs(u.x-u.tx)<6 && Math.abs(u.y-u.ty)<6){ u.beaming=true; if(u.target) u.target.state='lifting'; } }
     else { u.gfx.x=u.x+Math.sin(t*0.1)*4; }
     // beam visual
@@ -317,7 +326,7 @@ app.ticker.add((delta)=>{
       u.beam.drawPolygon([u.x-topW,u.y+6, u.x+topW,u.y+6, u.x+botW,by, u.x-botW,by]); u.beam.endFill(); }
     // flashlight damage
     const dx=flashlight.x-u.x, dy=flashlight.y-u.y;
-    if(Math.hypot(dx,dy)<LIGHT_R){ u.hp-=0.012*delta; u.hit=1;
+    if(Math.hypot(dx,dy)<LIGHT_R){ u.hp-=0.018*delta; u.hit=1;
       if(u.hp<=0){ // driven off!
         repelled++;
         burst(u.x,u.y,22,0x8ff0ff); burst(u.x,u.y,10,0xffffff);
