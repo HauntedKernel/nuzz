@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#0a0e1f">
+<title>Defend the Herd — Co-op</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
+  html,body{height:100%;overflow:hidden;background:#0a0e1f;font-family:'Comic Sans MS','Chalkboard SE',cursive,sans-serif;color:#fff;touch-action:none}
+  #wrap{position:fixed;inset:0}
+  canvas{display:block}
+  #hud{position:fixed;top:0;left:0;right:0;display:flex;justify-content:space-between;padding:14px 18px;pointer-events:none;z-index:5;font-weight:bold;text-shadow:0 2px 4px rgba(0,0,0,.6)}
+  #hud .lost{color:#ff8fa3}
+  #proto{position:fixed;bottom:8px;left:0;right:0;text-align:center;font-size:11px;letter-spacing:.15em;opacity:.4;z-index:5;pointer-events:none}
+  #hint{position:fixed;left:0;right:0;bottom:34px;text-align:center;font-size:15px;font-weight:bold;opacity:.9;z-index:5;pointer-events:none;text-shadow:0 2px 4px rgba(0,0,0,.6);transition:opacity .6s}
+  #lobby{position:fixed;inset:0;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:30px;background:radial-gradient(circle at 50% 38%,#16204a,#0a0e1f 75%);z-index:15}
+  #lobby h2{font-size:28px;margin-bottom:14px;text-shadow:0 3px 0 rgba(0,0,0,.4)}
+  #lobby p{max-width:330px;line-height:1.5;font-size:15.5px;margin-bottom:24px;opacity:.92}
+  #lobby button{font-family:inherit;font-size:18px;font-weight:bold;color:#0a0e1f;background:#ffd95e;border:none;border-radius:28px;padding:15px 36px;cursor:pointer;box-shadow:0 5px 0 #c9a93f}
+  #lobby button:active{transform:translateY(3px);box-shadow:0 2px 0 #c9a93f}
+  #status{font-size:16px;font-weight:bold;min-height:22px;margin-bottom:18px;color:#9fe8c0}
+  .dots::after{content:'';animation:dots 1.2s steps(4,end) infinite}
+  @keyframes dots{0%{content:''}25%{content:'.'}50%{content:'..'}75%{content:'...'}}
+  #lobbyNote{margin-top:14px;font-size:12px;opacity:.5;max-width:280px;line-height:1.4}
+  #back{position:fixed;top:14px;left:16px;font-size:13px;color:#fff;opacity:.7;text-decoration:none;z-index:16}
+  #end{position:fixed;inset:0;display:none;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:30px;background:rgba(10,14,31,.86);z-index:10}
+  #end h2{font-size:26px;margin-bottom:10px;text-shadow:0 3px 0 rgba(0,0,0,.4)}
+  #end p{max-width:330px;line-height:1.5;font-size:15px;margin-bottom:18px;opacity:.92}
+  #end .row{display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
+  #end button{font-family:inherit;font-size:16px;font-weight:bold;color:#0a0e1f;background:#ffd95e;border:none;border-radius:24px;padding:12px 24px;cursor:pointer;box-shadow:0 5px 0 #c9a93f}
+  #end button.ghost{background:transparent;color:#fff;box-shadow:none;border:2px solid rgba(255,255,255,.3)}
+  #err{position:fixed;inset:0;display:none;justify-content:center;align-items:center;text-align:center;padding:30px;z-index:20;font-size:15px;line-height:1.6}
+</style>
+</head>
+<body>
+<div id="wrap"></div>
+<a id="back" href="/aliens/">← solo</a>
+<div id="hud"><div>🐄 Herd: <span id="herd">0</span></div><div class="lost">👽 Lost: <span id="lost">0</span></div><div>⏱ <span id="time">60</span></div></div>
+<div id="hint">You + your partner share one herd — sweep your flashlights onto the UFOs!</div>
+<div id="proto">CO-OP PROTOTYPE · two players, one herd</div>
+<div id="lobby">
+  <h2>👽 Defend the Herd — Co-op</h2>
+  <p id="lobbyBlurb">Team up with another player anywhere in the world to defend the same herd. Your flashlight is gold, your partner's is blue.</p>
+  <div id="status"></div>
+  <button id="findBtn">🌐 Find a partner</button>
+  <div id="lobbyNote"></div>
+</div>
+<div id="end"><h2 id="endTitle">🚜</h2><p id="endBlurb"></p><div class="row"><button id="againBtn">Find another partner</button><button class="ghost" onclick="location.href='/aliens/'">Play solo</button></div></div>
+<div id="err">Couldn't load the graphics engine (PixiJS CDN). Check your connection and reload.</div>
+
+<script src="https://cdn.jsdelivr.net/npm/pixi.js@7/dist/pixi.min.js"></script>
+<script>
+(function(){
+if(!window.PIXI){ document.getElementById('err').style.display='flex'; return; }
+
+const ROOMS = 'wss://nuzz-rooms.djhubrii.workers.dev';   // realtime matchmaking + relay (see rooms/)
+
+/* ---- anonymous interest beacon (same sink as the rest of the game) ---- */
+function track(ev,props){ try{
+  var b=JSON.stringify(Object.assign({ev:ev,level:'aliens-coop',t:Date.now()},props||{}));
+  if(navigator.sendBeacon) navigator.sendBeacon('/api/e',new Blob([b],{type:'application/json'}));
+}catch(e){} }
+
+const app = new PIXI.Application({
+  resizeTo: window, backgroundColor: 0x0a0e1f, antialias: true,
+  resolution: Math.min(window.devicePixelRatio||1, 2), autoDensity: true
+});
+document.getElementById('wrap').appendChild(app.view);
+const S = app.screen;
+
+/* ---- layers ---- */
+const L = {};
+['bg','beam','animal','ufo','light','fx','none'].forEach(k=>{ L[k]=new PIXI.Container(); app.stage.addChild(L[k]); });
+
+/* ---- soft round light texture ---- */
+function lightTexture(size,r,g,b){
+  const c=document.createElement('canvas'); c.width=c.height=size;
+  const cx=c.getContext('2d'); const grd=cx.createRadialGradient(size/2,size/2,0,size/2,size/2,size/2);
+  grd.addColorStop(0,'rgba('+r+','+g+','+b+',0.95)');
+  grd.addColorStop(0.45,'rgba('+r+','+g+','+b+',0.30)');
+  grd.addColorStop(1,'rgba('+r+','+g+','+b+',0)');
+  cx.fillStyle=grd; cx.fillRect(0,0,size,size); return PIXI.Texture.from(c);
+}
+const TEX_WARM = lightTexture(256,255,244,200);   // my flashlight (gold)
+const TEX_COOL = lightTexture(256,150,210,255);   // partner flashlight (blue)
+const TEX_UFO  = lightTexture(256,150,230,255);
+
+let groundY = S.height*0.82;
+
+/* ---- background ---- */
+function buildBackground(){
+  L.bg.removeChildren(); groundY = S.height*0.82;
+  const stars=new PIXI.Graphics();
+  for(let i=0;i<90;i++){ stars.beginFill(0xffffff,0.3+Math.random()*0.6);
+    stars.drawCircle(Math.random()*S.width,Math.random()*groundY*0.9,Math.random()*1.4+0.4); stars.endFill(); }
+  L.bg.addChild(stars);
+  const moon=new PIXI.Graphics(); moon.beginFill(0xfdf6c8).drawCircle(S.width*0.82,S.height*0.16,34).endFill();
+  moon.beginFill(0x0a0e1f,0.35).drawCircle(S.width*0.82+12,S.height*0.16-8,30).endFill(); L.bg.addChild(moon);
+  const ground=new PIXI.Graphics();
+  ground.beginFill(0x122a18).drawRect(0,groundY,S.width,S.height-groundY).endFill();
+  ground.beginFill(0x1c3a22).drawRect(0,groundY,S.width,6).endFill(); L.bg.addChild(ground);
+  const barn=new PIXI.Graphics(); const bx=S.width*0.12, by=groundY, bw=92, bh=64;
+  barn.beginFill(0x5a2320).drawRect(bx-bw/2,by-bh,bw,bh).endFill();
+  barn.beginFill(0x5a2320).drawPolygon([bx-bw/2-6,by-bh,bx,by-bh-30,bx+bw/2+6,by-bh]).endFill();
+  barn.beginFill(0x2a120f).drawRect(bx-15,by-30,30,30).endFill(); L.bg.addChild(barn);
+}
+buildBackground();
+window.addEventListener('resize',buildBackground);
+
+/* ---- animal + ufo art (shared by host sim and guest renderer) ---- */
+const TYPES=['cow','sheep','chicken'];
+function makeAnimalGfx(type){
+  const g=new PIXI.Graphics();
+  if(type==='cow'){
+    g.beginFill(0xffffff).drawEllipse(0,0,20,14).endFill();
+    g.beginFill(0x2a2a30).drawCircle(-7,-3,5).drawCircle(8,3,4).endFill();
+    g.beginFill(0xffffff).drawCircle(16,-6,8).endFill();
+    g.beginFill(0x2a2a30).drawCircle(18,-7,1.6).endFill();
+    g.beginFill(0xf6a0b0).drawEllipse(0,12,5,3).endFill();
+    g.lineStyle(3,0x2a2a30); g.moveTo(-10,12).lineTo(-10,20); g.moveTo(8,12).lineTo(8,20);
+  } else if(type==='sheep'){
+    g.beginFill(0xf2f2f5).drawCircle(-8,0,11).drawCircle(0,-4,12).drawCircle(9,0,11).drawCircle(2,6,11).endFill();
+    g.beginFill(0x3a3a44).drawCircle(15,-2,7).endFill();
+    g.beginFill(0xffffff).drawCircle(13,-3,1.4).drawCircle(17,-3,1.4).endFill();
+    g.lineStyle(3,0x3a3a44); g.moveTo(-6,11).lineTo(-6,19); g.moveTo(7,11).lineTo(7,19);
+  } else {
+    g.beginFill(0xfff3d6).drawEllipse(0,0,11,10).endFill();
+    g.beginFill(0xffffff).drawCircle(8,-7,6).endFill();
+    g.beginFill(0xe0566a).drawCircle(8,-13,2.5).drawCircle(11,-12,2.5).endFill();
+    g.beginFill(0xf5a13a).drawPolygon([13,-7,19,-6,13,-4]).endFill();
+    g.beginFill(0x2a2a30).drawCircle(9,-8,1.3).endFill();
+    g.lineStyle(2,0xf5a13a); g.moveTo(-3,9).lineTo(-3,15); g.moveTo(4,9).lineTo(4,15);
+  }
+  return g;
+}
+function makeUfoGfx(){
+  const c=new PIXI.Container();
+  const glow=new PIXI.Sprite(TEX_UFO); glow.anchor.set(0.5); glow.scale.set(0.9); glow.y=8; glow.blendMode=PIXI.BLEND_MODES.ADD; c.addChild(glow);
+  const g=new PIXI.Graphics();
+  g.beginFill(0x9fb6c8).drawEllipse(0,0,34,11).endFill();
+  g.beginFill(0xc9dbe8).drawEllipse(0,-7,17,10).endFill();
+  for(let i=-2;i<=2;i++){ g.beginFill(0x6cf0c0).drawCircle(i*12,3,2.4).endFill(); }
+  c.addChild(g); c.lights=g; return c;
+}
+
+/* ---- two flashlights: mine (gold) + partner (blue) ---- */
+function makeFlash(tex){ const f=new PIXI.Sprite(tex); f.anchor.set(0.5); f.scale.set(1.1);
+  f.blendMode=PIXI.BLEND_MODES.ADD; f.x=S.width/2; f.y=S.height*0.6;
+  const core=new PIXI.Sprite(tex); core.anchor.set(0.5); core.scale.set(0.5); core.blendMode=PIXI.BLEND_MODES.ADD; f.addChild(core);
+  L.light.addChild(f); return f; }
+const myFlash=makeFlash(TEX_WARM);
+const partnerFlash=makeFlash(TEX_COOL); partnerFlash.visible=false;
+const LIGHT_R=120;
+
+/* ---- local aiming input (pointer + tilt), feeds MY flashlight ---- */
+let aimX=S.width/2, aimY=S.height*0.6, pointerActive=false;
+function setAim(e){ pointerActive=true; aimX=e.clientX; aimY=e.clientY; hideHint(); }
+window.addEventListener('pointermove',setAim);
+window.addEventListener('pointerdown',setAim);
+let tiltOn=false, baseG=null, baseB=null;
+function onTilt(e){ if(e.gamma==null||e.beta==null) return;
+  if(baseG==null){ baseG=e.gamma; baseB=e.beta; }
+  const sx=(S.width/2)/25, sy=(S.height/2)/20;
+  aimX=Math.max(0,Math.min(S.width, S.width/2+(e.gamma-baseG)*sx));
+  aimY=Math.max(0,Math.min(S.height, S.height*0.55+(e.beta-baseB)*sy));
+  pointerActive=true; hideHint();
+}
+function hideHint(){ const h=document.getElementById('hint'); if(h) h.style.opacity=0; }
+
+/* ---- particles (local cosmetic, both sides) ---- */
+const parts=[];
+function burst(x,y,n,color){ for(let i=0;i<n;i++){ const p=new PIXI.Graphics();
+  p.beginFill(color).drawCircle(0,0,2+Math.random()*3).endFill(); p.x=x; p.y=y; p.blendMode=PIXI.BLEND_MODES.ADD;
+  L.fx.addChild(p); const a=Math.random()*Math.PI*2,s=2+Math.random()*4;
+  parts.push({gfx:p,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:1}); } }
+
+/* ================= NETWORKING ================= */
+let role=null, ws=null, started=false, ended=false, t=0;
+const herdEl=document.getElementById('herd'), lostEl=document.getElementById('lost'), timeEl=document.getElementById('time');
+const lobby=document.getElementById('lobby'), statusEl=document.getElementById('status'), findBtn=document.getElementById('findBtn');
+
+function setStatus(txt,spin){ statusEl.innerHTML = txt + (spin?'<span class="dots"></span>':''); }
+
+const touch = navigator.maxTouchPoints>0 || 'ontouchstart' in window;
+document.getElementById('lobbyNote').textContent = touch ? "Tilt your phone to aim — hold it however's comfy." : "Move your mouse to aim your flashlight.";
+findBtn.textContent = touch ? "🌐 Tap to find a partner" : "🌐 Find a partner";
+
+findBtn.addEventListener('click', function(){
+  findBtn.style.display='none';
+  // ask iOS for motion permission on this gesture, then start matchmaking
+  const DOE=window.DeviceOrientationEvent;
+  if(DOE && typeof DOE.requestPermission==='function'){
+    DOE.requestPermission().then(function(r){ if(r==='granted'){ window.addEventListener('deviceorientation',onTilt); tiltOn=true; } findPartner(); }).catch(findPartner);
+  } else if(DOE){ window.addEventListener('deviceorientation',onTilt); tiltOn=true; findPartner(); }
+  else findPartner();
+});
+
+function findPartner(){
+  setStatus('Looking for a partner',true);
+  track('find');
+  let lobbyWS;
+  try{ lobbyWS=new WebSocket(ROOMS+'/find'); }
+  catch(e){ setStatus('Connection blocked. Try again.'); findBtn.style.display=''; return; }
+  lobbyWS.onmessage=function(ev){
+    let m; try{ m=JSON.parse(ev.data); }catch(e){ return; }
+    if(m.type==='matched'){ role=m.role; lobbyWS.close(); joinRoom(m.roomId); }
+  };
+  lobbyWS.onerror=function(){ setStatus('Couldn\'t reach the matchmaker. Tap to retry.'); findBtn.style.display=''; };
+  lobbyWS.onclose=function(){ if(!role && !ws){ /* closed before match */ } };
+}
+
+function joinRoom(roomId){
+  setStatus('Partner found! Connecting',true);
+  ws=new WebSocket(ROOMS+'/room/'+roomId);
+  ws.onmessage=onRoomMsg;
+  ws.onerror=function(){ setStatus('Lost the connection. Tap to retry.'); findBtn.style.display=''; };
+  ws.onclose=function(){ if(started && !ended){ partnerGone('The connection dropped.'); } };
+}
+function sendNet(o){ if(ws && ws.readyState===1){ try{ ws.send(JSON.stringify(o)); }catch(e){} } }
+
+function onRoomMsg(ev){
+  let m; try{ m=JSON.parse(ev.data); }catch(e){ return; }
+  switch(m.type){
+    case 'ready':       beginMatch(); break;
+    case 'partner_left':if(started && !ended) partnerGone('Your partner left.'); break;
+    case 'i':           guestAim.x=m.x; guestAim.y=m.y; partnerFlash.visible=true; break;   // host: guest's aim
+    case 's':           applySnapshot(m); break;                                             // guest: world state
+    case 'end':         showEnd(m.title,m.blurb); break;                                     // guest: match over
+  }
+}
+
+function beginMatch(){
+  lobby.style.display='none'; started=true; partnerFlash.visible=true;
+  track('start',{role:role});
+  if(role==='host'){ hostInit(); }
+  else { setStatus(''); }   // guest waits for first snapshot
+}
+
+function partnerGone(reason){
+  if(ended) return; ended=true;
+  showEnd('👋 Partner left', reason+' The herd scatters without backup — find another partner for a fresh round.');
+}
+
+/* ================= HOST: authoritative simulation ================= */
+let animals=[], ufos=[], lost=0, repelled=0, timeLeft=60*60, spawnT=120, nextId=1;
+const guestAim={x:S.width/2, y:S.height*0.6};
+
+function hostMakeAnimal(type){
+  const g=makeAnimalGfx(type); const id=nextId++;
+  const a={id:id, gfx:g, type:type, x:40+Math.random()*(S.width-80), y:groundY-12,
+           vx:(Math.random()<0.5?-1:1)*(0.2+Math.random()*0.3), state:'graze', wob:Math.random()*7, ufo:null};
+  g.x=a.x; g.y=a.y; L.animal.addChild(g); animals.push(a); return a;
+}
+function hostMakeUfo(){
+  const targets=animals.filter(a=>a.state==='graze' && !a.ufo); if(!targets.length) return;
+  const tgt=targets[(Math.random()*targets.length)|0];
+  const c=makeUfoGfx(); c.x=Math.random()*S.width; c.y=-30; L.ufo.addChild(c);
+  const beam=new PIXI.Graphics(); beam.blendMode=PIXI.BLEND_MODES.ADD; L.beam.addChild(beam);
+  const u={id:nextId++, gfx:c, lights:c.lights, beam:beam, x:c.x, y:c.y, tx:tgt.x, ty:S.height*(0.16+Math.random()*0.12),
+           hp:1, target:tgt, beaming:false, leaving:false, hit:0};
+  tgt.ufo=u; ufos.push(u);
+}
+function hostInit(){
+  for(let i=0;i<8;i++) hostMakeAnimal(TYPES[i%3]);
+  setStatus('');
+}
+
+function hostEnd(){
+  ended=true;
+  const left=animals.length; let title,blurb;
+  if(lost===0){ title='🏆 Flawless team defense!'; blurb="Not one critter taken. You two make a terrifying flashlight duo — the aliens are filing a complaint."; }
+  else if(lost<=2){ title='🚜 Solid teamwork'; blurb="A couple slipped through, but the herd's mostly safe. Good shift on the night watch, partner."; }
+  else if(lost<=5){ title='👽 They got a few'; blurb="The aliens made off with a handful. Tighten up the crossfire next round."; }
+  else { title='🛸 Rough night'; blurb="The pasture's looking thin. Somewhere a UFO is very full of your livestock."; }
+  blurb += '  ('+left+' saved · '+lost+' taken)';
+  // host owns the shared run: log it once + add to the worldwide counters
+  track('run_end',{role:'host',result:(lost===0?'perfect':lost<=2?'good':lost<=5?'ok':'rough'),lost:lost,saved:left,ufos:repelled,
+    inc:{animals_saved:left,animals_lost:lost,ufos_repelled:repelled,alien_runs:1}});
+  sendNet({type:'end',title:title,blurb:blurb});
+  showEnd(title,blurb);
+}
+
+/* ================= GUEST: render from host snapshots ================= */
+const gAnimals={}, gUfos={};   // id -> sprite wrappers
+function applySnapshot(m){
+  if(!started) return;
+  herdEl.textContent=m.hd; lostEl.textContent=m.ls; timeEl.textContent=m.tm;
+  // host's flashlight is the partner light on the guest's screen
+  partnerFlash.x=m.me[0]; partnerFlash.y=m.me[1]; partnerFlash.visible=true;
+  // animals
+  const seen={};
+  (m.an||[]).forEach(function(a){ const id=a[0]; seen[id]=1; let w=gAnimals[id];
+    if(!w){ const g=makeAnimalGfx(TYPES[a[3]]||'cow'); L.animal.addChild(g); w=gAnimals[id]={gfx:g}; }
+    w.gfx.x=a[1]; w.gfx.y=a[2]; w.gfx.rotation = a[4]===1 ? Math.sin(t*0.3)*0.3 : 0;
+  });
+  for(const id in gAnimals){ if(!seen[id]){ L.animal.removeChild(gAnimals[id].gfx); delete gAnimals[id]; } }
+  // ufos (+ their beams)
+  const seenU={};
+  (m.uf||[]).forEach(function(u){ const id=u[0]; seenU[id]=1; let w=gUfos[id];
+    if(!w){ const c=makeUfoGfx(); L.ufo.addChild(c); const beam=new PIXI.Graphics(); beam.blendMode=PIXI.BLEND_MODES.ADD; L.beam.addChild(beam);
+      w=gUfos[id]={gfx:c,beam:beam}; }
+    w.gfx.x=u[1]; w.gfx.y=u[2]; const beaming=u[4]===1;
+    w.beam.clear();
+    if(beaming){ const topW=14,botW=46,by=groundY-6,pulse=0.18+0.10*Math.sin(t*0.3);
+      w.beam.beginFill(0x96ffd2,pulse); w.beam.drawPolygon([u[1]-topW,u[2]+6,u[1]+topW,u[2]+6,u[1]+botW,by,u[1]-botW,by]); w.beam.endFill(); }
+  });
+  for(const id in gUfos){ if(!seenU[id]){ L.ufo.removeChild(gUfos[id].gfx); L.beam.removeChild(gUfos[id].beam); delete gUfos[id]; } }
+}
+
+/* ================= shared render/loop ================= */
+let netT=0;
+app.ticker.add(function(delta){
+  t+=delta;
+  // my flashlight follows my aim (both roles); idle bob before first input
+  if(!pointerActive && !started){ aimX=S.width/2+Math.sin(t*0.02)*60; aimY=S.height*0.55; }
+  myFlash.x=aimX; myFlash.y=aimY;
+  myFlash.children[0].alpha=0.7+Math.sin(t*0.3)*0.2;
+
+  // particles (cosmetic)
+  for(let i=parts.length-1;i>=0;i--){ const p=parts[i]; p.gfx.x+=p.vx*delta; p.gfx.y+=p.vy*delta; p.vy+=0.12*delta;
+    p.life-=0.03*delta; p.gfx.alpha=Math.max(0,p.life); if(p.life<=0){ L.fx.removeChild(p.gfx); parts.splice(i,1); } }
+
+  if(!started || ended){ return; }
+
+  if(role==='guest'){
+    // thin client: just stream my aim to the host (~20Hz)
+    netT+=delta; if(netT>=3){ netT=0; sendNet({type:'i',x:Math.round(aimX),y:Math.round(aimY)}); }
+    return;
+  }
+
+  /* ---------- HOST: run the authoritative sim ---------- */
+  // partner (guest) flashlight rendered at last reported aim
+  partnerFlash.x=guestAim.x; partnerFlash.y=guestAim.y;
+
+  timeLeft-=delta; if(timeLeft<=0){ timeLeft=0; hostEnd(); return; }
+  timeEl.textContent=Math.ceil(timeLeft/60); herdEl.textContent=animals.length; lostEl.textContent=lost;
+
+  spawnT-=delta;
+  if(spawnT<=0 && ufos.length<6){ hostMakeUfo(); spawnT=80+Math.random()*110 - (60-timeLeft/60)*1.4; }
+
+  for(let i=animals.length-1;i>=0;i--){ const a=animals[i];
+    if(a.state==='graze'){ a.x+=a.vx*delta; if(a.x<24||a.x>S.width-24) a.vx*=-1;
+      a.gfx.y=groundY-12+Math.sin(t*0.1+a.wob)*1.2; a.gfx.scale.x=a.vx<0?-1:1; a.gfx.x=a.x; }
+    else if(a.state==='lifting'){ a.gfx.x+=Math.sin(t*0.4+a.wob)*0.6; a.gfx.rotation=Math.sin(t*0.3)*0.3;
+      a.gfx.y-=0.55*delta; if(a.ufo && a.gfx.y < a.ufo.y+18){
+        burst(a.gfx.x,a.gfx.y,14,0xc070ff); L.animal.removeChild(a.gfx); animals.splice(i,1); lost++;
+        if(a.ufo){ a.ufo.target=null; a.ufo.beaming=false; a.ufo.leaving=true; } } }
+    else if(a.state==='falling'){ a.gfx.rotation*=0.85; a.gfx.y+=2.4*delta;
+      if(a.gfx.y>=groundY-12){ a.gfx.y=groundY-12; a.gfx.rotation=0; a.state='graze'; } }
+  }
+
+  for(let i=ufos.length-1;i>=0;i--){ const u=ufos[i]; u.hit*=0.85;
+    if(u.leaving){ u.y-=4*delta; u.gfx.y=u.y; u.gfx.alpha-=0.02*delta; u.beam.clear();
+      if(u.gfx.y<-60||u.gfx.alpha<=0){ L.ufo.removeChild(u.gfx); L.beam.removeChild(u.beam); ufos.splice(i,1); } continue; }
+    if(!u.beaming){ u.x+=(u.tx-u.x)*0.05*delta; u.y+=(u.ty-u.y)*0.05*delta; u.gfx.x=u.x; u.gfx.y=u.y;
+      if(Math.abs(u.x-u.tx)<6 && Math.abs(u.y-u.ty)<6){ u.beaming=true; if(u.target) u.target.state='lifting'; } }
+    else { u.gfx.x=u.x+Math.sin(t*0.1)*4; }
+    u.beam.clear();
+    if(u.beaming && u.target){ const topW=14,botW=46,by=groundY-6,pulse=0.18+0.10*Math.sin(t*0.3);
+      u.beam.beginFill(0x96ffd2,pulse); u.beam.drawPolygon([u.x-topW,u.y+6,u.x+topW,u.y+6,u.x+botW,by,u.x-botW,by]); u.beam.endFill(); }
+    // damage from EITHER flashlight (mine = host aim, partner = guest aim)
+    const hitMine = Math.hypot(myFlash.x-u.x, myFlash.y-u.y) < LIGHT_R;
+    const hitPartner = Math.hypot(guestAim.x-u.x, guestAim.y-u.y) < LIGHT_R;
+    if(hitMine || hitPartner){ u.hp-=0.012*delta*((hitMine&&hitPartner)?1.8:1); u.hit=1;
+      if(u.hp<=0){ repelled++; burst(u.x,u.y,22,0x8ff0ff); burst(u.x,u.y,10,0xffffff);
+        if(u.target){ u.target.state='falling'; u.target.ufo=null; u.target=null; }
+        u.beaming=false; u.leaving=true; } }
+    u.lights.alpha = u.hit>0.05 ? (0.4+Math.random()*0.6) : 1;
+    u.gfx.scale.set(1+u.hit*0.06);
+  }
+
+  // broadcast snapshot (~15Hz)
+  netT+=delta;
+  if(netT>=4){ netT=0;
+    sendNet({ type:'s', hd:animals.length, ls:lost, tm:Math.ceil(timeLeft/60),
+      me:[Math.round(myFlash.x),Math.round(myFlash.y)],
+      an:animals.map(a=>[a.id, Math.round(a.gfx.x), Math.round(a.gfx.y), TYPES.indexOf(a.type), a.state==='lifting'?1:0]),
+      uf:ufos.map(u=>[u.id, Math.round(u.x), Math.round(u.y), Math.round(u.hp*100), u.beaming?1:0]) });
+  }
+});
+
+/* ---- end screen ---- */
+function showEnd(title,blurb){
+  ended=true;
+  document.getElementById('endTitle').textContent=title;
+  document.getElementById('endBlurb').textContent=blurb;
+  document.getElementById('end').style.display='flex';
+  try{ if(ws) ws.close(); }catch(e){}
+}
+document.getElementById('againBtn').addEventListener('click',function(){ location.reload(); });
+})();
+</script>
+</body>
+</html>
