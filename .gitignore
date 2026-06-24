@@ -5,6 +5,10 @@
 # Derived deploy folder — synced from the repo root before each deploy (see HANDOFF.md)
 public/
 
+# Art-dev scratch for the knights level (190MB of raw MidJourney refs + preview tools).
+# The shipped level lives in knights/ (slim assets). Keep this local-only.
+Game_of_kitties/
+
 # Dependencies / build noise (none today, but just in case)
 node_modules/
 *.log

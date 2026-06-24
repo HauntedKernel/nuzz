@@ -9,3 +9,17 @@
 /Alien/    /aliens/   301
 /Aliens*   /aliens/   301
 /ALIENS*   /aliens/   301
+# Space Force Kitties lives at /kitties/ — catch the singular + autocapitalized variants.
+/kitty     /kitties/   301
+/kitty/    /kitties/   301
+/Kitty     /kitties/   301
+/Kitty/    /kitties/   301
+/Kitties*  /kitties/   301
+/KITTIES*  /kitties/   301
+# Game of Kitties (knights saga) lives at /knights/ — catch singular + autocapitalized variants.
+/knight     /knights/   301
+/knight/    /knights/   301
+/Knight     /knights/   301
+/Knight/    /knights/   301
+/Knights*   /knights/   301
+/KNIGHTS*   /knights/   301

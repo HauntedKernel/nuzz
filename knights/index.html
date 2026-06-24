@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#05070f">
+<title>Game of Kitties — Ser Biscuit</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none}
+  html,body{height:100%;overflow:hidden;background:#05070f;font-family:'Trebuchet MS',system-ui,sans-serif;color:#e7eefc;touch-action:none}
+  canvas{display:block;position:fixed;inset:0}
+  #hud{position:fixed;top:0;left:0;right:0;display:flex;justify-content:space-between;padding:12px 16px;z-index:4;pointer-events:none;font-weight:bold;text-shadow:0 2px 5px rgba(0,0,0,.7)}
+  #hearts{font-size:22px;letter-spacing:2px}
+  #felled{font-size:15px;text-align:right;opacity:.95}
+  #felled .n{color:#ffd45e;font-size:19px}
+  /* touch controls */
+  .pad{position:fixed;bottom:0;z-index:5;display:flex;gap:12px;padding:20px;align-items:flex-end}
+  #padL{left:0}#padR{right:0}
+  .key{width:66px;height:66px;border-radius:50%;background:rgba(120,150,220,.16);border:2px solid rgba(150,180,240,.35);
+    display:flex;align-items:center;justify-content:center;font-size:26px;color:#dce7ff;backdrop-filter:blur(4px)}
+  .key:active{background:rgba(120,150,220,.42)}
+  .key.big{width:78px;height:78px;font-size:30px}
+  .key.atk{background:rgba(184,66,31,.38);border-color:rgba(224,103,60,.6)}
+  .key.atk:active{background:rgba(210,79,39,.7)}
+  .overlay{position:fixed;inset:0;z-index:10;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:28px;background:radial-gradient(circle at 50% 35%,rgba(20,30,60,.86),rgba(5,7,15,.95))}
+  .overlay h1{font-size:30px;margin-bottom:8px;text-shadow:0 3px 0 rgba(0,0,0,.5);line-height:1.15}
+  .overlay p{max-width:330px;line-height:1.55;font-size:15px;opacity:.9;margin-bottom:18px}
+  .overlay .sub{font-size:12px;letter-spacing:.18em;text-transform:uppercase;opacity:.6;margin-bottom:14px}
+  .overlay button{font:inherit;font-size:18px;font-weight:bold;color:#1a1206;background:#ffd45e;border:none;border-radius:30px;padding:14px 38px;cursor:pointer;box-shadow:0 5px 0 #c9a23f}
+  .overlay button:active{transform:translateY(3px);box-shadow:0 2px 0 #c9a23f}
+  .hide{display:none!important}
+  #keys{font-size:12px;opacity:.55;margin-top:16px;line-height:1.7}
+  #bar{position:fixed;top:44px;left:16px;right:16px;height:6px;z-index:4;background:rgba(255,255,255,.12);border-radius:5px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.5)}
+  #barfill{height:100%;width:0;background:linear-gradient(90deg,#5cf0c0,#8ff0ff)}
+  #stam{position:fixed;top:53px;left:16px;right:16px;height:5px;z-index:4;background:rgba(255,255,255,.10);border-radius:4px;overflow:hidden}
+  #stamfill{height:100%;width:100%;background:linear-gradient(90deg,#9fe870,#e8e060)}
+  #stamfill.low{background:#ff7a5a}
+  #bossbar{position:fixed;top:64px;left:12%;right:12%;z-index:4;display:none}
+  #bosslab{font-size:10px;letter-spacing:.18em;text-align:center;color:#ff9a9a;font-weight:bold;text-shadow:0 1px 3px #000;margin-bottom:3px}
+  #bosstrack{height:9px;background:rgba(255,255,255,.14);border-radius:5px;overflow:hidden}
+  #bossfill{height:100%;width:100%;background:linear-gradient(90deg,#ff5a5a,#ff9e3c);transition:width .12s}
+  .badge{font-size:38px;font-weight:bold;letter-spacing:.05em;margin:2px 0 12px;text-shadow:0 3px 0 rgba(0,0,0,.4)}
+  .card{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:14px;padding:11px 22px;margin:4px 0 14px;font-size:15px;line-height:1.85}
+  .card .v{color:#ffd45e;font-weight:bold}
+  .cta{max-width:330px;background:#ffd45e;color:#1a1206;border-radius:14px;padding:12px 18px;margin:2px 0 12px;font-size:14px;line-height:1.45;font-weight:bold}
+  .cta b{color:#b5471f}
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+<div id="hud">
+  <div id="hearts"></div>
+  <div id="felled">KNIGHTS FELLED<br><span class="n">0</span></div>
+</div>
+<div id="bar"><div id="barfill"></div></div>
+<div id="stam"><div id="stamfill"></div></div>
+<div id="bossbar"><div id="bosslab">⚔ THE BLACK KNIGHT ⚔</div><div id="bosstrack"><div id="bossfill"></div></div></div>
+
+<div class="pad" id="padL">
+  <div class="key" data-k="left">◀</div>
+  <div class="key" data-k="right">▶</div>
+</div>
+<div class="pad" id="padR">
+  <div class="key big" data-k="jump">⤴</div>
+  <div class="key big atk" data-k="attack">⚔</div>
+</div>
+
+<div class="overlay" id="start">
+  <div class="sub">Game of Kitties · Chapter I</div>
+  <h1>Ser Biscuit's<br>March on the Gate</h1>
+  <p><b style="color:#ff6a4a">Red</b> wind-up → strike to interrupt. <b style="color:#7fa8e0">Steel</b> knights only take damage <i>while they swing</i>. <b style="color:#ffd45e">Gold</b> wind-up is unblockable — <b>jump</b> it! Mind your <b>stamina</b>.</p>
+  <button id="startBtn">Begin the march</button>
+  <div id="keys">⌨ &nbsp;A / D or ← → move &nbsp;·&nbsp; SPACE strike &nbsp;·&nbsp; W / ↑ jump-dodge<br>📱 use the on-screen buttons</div>
+</div>
+<div class="overlay hide" id="end">
+  <div class="sub" id="endSub">Victory</div>
+  <h1 id="endTitle"></h1>
+  <div class="badge" id="endBadge"></div>
+  <div class="card" id="endCard"></div>
+  <div class="cta">📸 Screenshot &amp; post to <b>@nuzz.pet</b> on IG/TikTok to win a gift card!</div>
+  <p id="endMsg" style="margin-bottom:10px"></p>
+  <button id="endBtn">March again</button>
+</div>
+
+<script>
+const cv=document.getElementById('cv'),ctx=cv.getContext('2d');
+let W,H,DPR=Math.min(devicePixelRatio||1,2);
+function resize(){W=innerWidth;H=innerHeight;cv.width=W*DPR;cv.height=H*DPR;ctx.setTransform(DPR,0,0,DPR,0,0);}
+addEventListener('resize',resize);resize();
+
+// ---------- assets ----------
+const FILES={                                  // hero walk = the two uploaded RUN frames; strike = uploads; enemy = black cat on all fours
+  run1:'C_run_1', run2:'C_run_2',
+  wlk:'C_h_walking', s2:'C_h_strike_2', s3:'C_h_strike_3',
+  bk1:'wcut_1', bk2:'wcut_2'
+};
+const HSTRIDE=46, EWSTRIDE=44;                 // px of travel per leg-swap (keeps legs matched to motion)
+const PATH={far:'assets/far.png',mid:'assets/mid_cut.png',ground:'assets/walkway.png'};
+for(const fk in FILES)PATH[fk]='assets/'+FILES[fk]+'.png';
+const IMG={};let loaded=0;let ready=false;const total=Object.keys(PATH).length;const assetErr=[];
+for(const k in PATH){const im=new Image();
+  im.onload=()=>{loaded++;};
+  im.onerror=()=>{loaded++;assetErr.push(PATH[k]);};
+  im.src=PATH[k];IMG[k]=im;}
+
+// ---------- pose helpers (face RIGHT) ----------
+const SC={};
+function P(k){return{im:k,flip:false,sc:SC[k]||1};}
+const ANIM={
+  idle:  {f:[P('run1')],              mode:'hold'},
+  walk:  {f:[P('run1'),P('run2')],    mode:'loop', fps:6},   // frame chosen by distance (see draw)
+  attack:{f:[P('wlk'),P('s2'),P('s3')], mode:'once', fps:9},
+  jump:  {f:[P('run1')],              mode:'arc',  fps:6},
+};
+
+// ---------- parallax ----------
+const FOG='124,142,178',SPD={far:.15,mid:.45,ground:1};
+const FEET=.87, GROUNDH=.66;
+function tile(im,s,dy,dh,sT,sB){if(!im||!im.naturalWidth)return;const sH=im.height*(sB-sT),sY=im.height*sT,tw=dh*(im.width/sH);
+  let k=Math.floor(s/tw),x=k*tw-s;
+  for(;x<W;x+=tw,k++){const fl=(((k%2)+2)%2)===1;
+    if(fl){ctx.save();ctx.translate(x+tw,dy);ctx.scale(-1,1);ctx.drawImage(im,0,sY,im.width,sH,0,0,tw,dh);ctx.restore();}
+    else ctx.drawImage(im,0,sY,im.width,sH,x,dy,tw,dh);}}
+function scene(off){let g;const gy=H*GROUNDH;
+  tile(IMG.far,off*SPD.far,0,H,0,1);
+  g=ctx.createLinearGradient(0,gy-H*.3,0,gy+H*.04);g.addColorStop(0,`rgba(${FOG},0)`);g.addColorStop(1,`rgba(${FOG},.42)`);ctx.fillStyle=g;ctx.fillRect(0,gy-H*.3,W,H*.34);
+  {const dh=H*.6,dy=gy-dh*.82;tile(IMG.mid,off*SPD.mid,dy,dh,0,1);
+   g=ctx.createLinearGradient(0,dy+dh*.42,0,dy+dh);g.addColorStop(0,`rgba(${FOG},0)`);g.addColorStop(1,`rgba(${FOG},.72)`);ctx.fillStyle=g;ctx.fillRect(0,dy+dh*.42,W,dh*.58);}
+  {const dh=H-gy+H*.1,dy=H-dh;tile(IMG.ground,off*SPD.ground,dy,dh,.58,1);
+   g=ctx.createLinearGradient(0,dy,0,dy+dh*.55);g.addColorStop(0,`rgba(${FOG},.8)`);g.addColorStop(1,`rgba(${FOG},0)`);ctx.fillStyle=g;ctx.fillRect(0,dy,W,dh*.55);}}
+
+// offscreen for enemy tint
+const off=document.createElement('canvas'),octx=off.getContext('2d');
+function sprite(pose,cx,baseY,scale,faceLeft,tint){
+  const im=IMG[pose.im];if(!im||!im.complete||!im.naturalWidth)return;
+  const dh=H*.42*scale*pose.sc,dw=dh*(im.width/im.height);
+  const x=cx-dw/2,y=baseY-dh;
+  const flip=pose.flip!==!!faceLeft;        // xor: combine pose flip with desired facing
+  if(tint){
+    const w=Math.max(2,Math.ceil(dw)),h=Math.max(2,Math.ceil(dh));
+    off.width=w;off.height=h;octx.clearRect(0,0,w,h);
+    if(flip){octx.save();octx.translate(w,0);octx.scale(-1,1);octx.drawImage(im,0,0,w,h);octx.restore();}
+    else octx.drawImage(im,0,0,w,h);
+    octx.globalCompositeOperation='source-atop';octx.fillStyle=tint;octx.fillRect(0,0,w,h);
+    octx.globalCompositeOperation='source-over';
+    ctx.drawImage(off,x,y,dw,dh);
+  } else {
+    ctx.save();
+    if(flip){ctx.translate(x+dw,y);ctx.scale(-1,1);ctx.drawImage(im,0,0,dw,dh);}
+    else ctx.drawImage(im,x,y,dw,dh);
+    ctx.restore();
+  }
+}
+function shadow(cx,baseY,r,lift){ctx.save();ctx.globalAlpha=.34*(1-lift*.7);ctx.fillStyle='#000';
+  ctx.beginPath();ctx.ellipse(cx,baseY-2,r*(1-lift*.35),H*.018,0,0,7);ctx.fill();ctx.restore();}
+
+// ---------- game state ----------
+const PLAYER_X=()=>W*.3;
+const MAXHP=5;
+const STAM_MAX=100, ATK_COST=34, JUMP_COST=24;
+const SWORD=195, STOPGAP=82;                    // hero strike reach / gap at which enemies stop to strike (world px, edge-based)
+const KIND={
+  grunt: {hp:2, sc:0.95, spd:3.0, wind:18, claw:115, col:null},
+  shield:{hp:3, sc:0.95, spd:2.4, wind:20, claw:115, col:'rgba(90,120,170,.5)'},  // only hurt WHILE it swings
+  lunger:{hp:2, sc:1.0,  spd:3.4, wind:16, claw:170, col:'rgba(170,70,200,.4)'},  // can't be interrupted -> must dodge
+  boss:  {hp:12,sc:1.3,  spd:2.6, wind:24, claw:140, col:null},
+};
+let worldX, vel, hp, felled, enemies, parts, shake, anim, animT, atkHit, jumpV, jumpY, invuln, running, pathEnd, boss, won, stam, prevAttack;
+const keys={left:0,right:0,jump:0,attack:0};
+
+function enemyHead(e){   // world X of the cat's FRONT edge (it faces the player) so spacing matches the wide sprite
+  const im=IMG[(Math.floor((e.walked||0)/EWSTRIDE)%2===0)?'bk1':'bk2']||IMG.bk1;
+  const sc=KIND[e.kind].sc, dh=H*.42*sc, dw=(im&&im.naturalWidth)?dh*(im.width/im.height):300;
+  return e.wx - dw*0.42;
+}
+function mkEnemy(x,kind){const h=KIND[kind].hp;return{wx:x,kind,hp:h,maxhp:h,state:'wait',t:0,hitT:0,die:0,anim:0,walked:0,cool:0,seq:0};}
+function reset(){
+  worldX=0;vel=0;hp=MAXHP;felled=0;parts=[];shake=0;anim='idle';animT=0;atkHit=false;
+  jumpV=0;jumpY=0;invuln=0;running=true;won=false;stam=STAM_MAX;prevAttack=0;
+  // designed encounters: scouts -> shielded press -> mixed gauntlet -> the boss
+  const layout=[[1300,'grunt'],[2000,'grunt'],[2250,'shield'],
+    [3000,'grunt'],[3220,'lunger'],[3440,'grunt'],
+    [4250,'shield'],[4500,'grunt'],[4750,'lunger'],
+    [5500,'grunt'],[5760,'shield']];
+  enemies=layout.map(([x,k])=>mkEnemy(x,k));
+  pathEnd=7100;
+  boss=mkEnemy(pathEnd-280,'boss'); enemies.push(boss);
+  updHUD();
+}
+function updHUD(){
+  document.getElementById('hearts').textContent='❤'.repeat(Math.max(0,hp))+'♡'.repeat(Math.max(0,MAXHP-hp));
+  document.querySelector('#felled .n').textContent=felled;
+}
+
+function startAnim(a){anim=a;animT=0;atkHit=false;}
+function burst(x,y,n,c){for(let i=0;i<n;i++){const a=Math.random()*7,s=2+Math.random()*4;
+  parts.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s-2,life:1,c});}}
+
+function step(){
+  const onGround=jumpY>=-0.5;
+  const atkPressed=keys.attack&&!prevAttack; prevAttack=keys.attack;   // deliberate press only
+  // movement (rooted while swinging)
+  let mv=(keys.right?1:0)-(keys.left?1:0);
+  if(anim==='attack')mv=0;
+  vel+=(mv*4.2-vel)*0.25;
+  worldX=Math.max(0,Math.min(pathEnd,worldX+vel));
+  // jump (costs stamina)
+  if(keys.jump&&onGround&&anim!=='attack'&&stam>=JUMP_COST){jumpV=-13;stam-=JUMP_COST;startAnim('jump');}
+  if(!onGround||jumpV<0){jumpV+=0.7;jumpY+=jumpV;if(jumpY>0){jumpY=0;jumpV=0;}}
+  // strike: deliberate, costs stamina, commits you
+  if(atkPressed&&anim!=='attack'&&onGround&&stam>=ATK_COST){startAnim('attack');stam-=ATK_COST;shake=Math.max(shake,5);}
+  // stamina regen (none mid-swing; faster when standing still)
+  if(anim!=='attack')stam=Math.min(STAM_MAX,stam+(Math.abs(vel)<0.4&&onGround?1.2:0.55));
+  // locomotion anim
+  if(anim!=='attack'&&anim!=='jump')anim=Math.abs(vel)>0.4?'walk':'idle';
+  if(anim==='jump'&&onGround&&jumpV===0&&animT>6)anim='idle';
+  animT++;
+
+  const px=PLAYER_X(),baseY=H*FEET;
+  // player attack hit window (hits everything in front; clusters take damage together)
+  if(anim==='attack'){
+    const prog=animT/(ANIM.attack.f.length/ANIM.attack.fps*60);
+    if(prog>.28&&prog<.55&&!atkHit){atkHit=true;
+      enemies.forEach(e=>{if(e.state==='dead')return;
+        const hx=enemyHead(e), ex=px+(e.wx-worldX);
+        if(hx>worldX-20 && hx<worldX+SWORD){
+          const open=(e.state==='windup'||e.state==='recover'||e.state==='stagger');
+          if(e.kind==='shield' && !open){e.hitT=6;shake=Math.max(shake,4);burst(px+SWORD*.5,baseY-H*.16,7,'170,200,255');return;} // shield clang, no damage
+          e.hp--;e.hitT=10;shake=Math.max(shake,8);burst(ex,baseY-H*.16,10,'255,210,90');
+          if(e.kind!=='lunger'){e.state='stagger';e.t=0;}   // lungers can't be interrupted
+          if(e.hp<=0){e.state='dead';e.die=0.001;burst(ex,baseY-H*.18,26,'255,120,60');if(e.kind==='boss')won=true;else felled++;updHUD();}
+        }});
+    }
+    if(prog>=1)anim='idle';
+  }
+  // enemies: approach -> windup (telegraph) -> strike -> recover
+  enemies.forEach(e=>{
+    if(e.state==='dead'){e.die=Math.min(1,e.die+0.05);return;}
+    const ex=px+(e.wx-worldX);
+    if(e.state==='wait'){ if(ex<W+100)e.state='approach'; else return; }
+    if(e.hitT>0)e.hitT--; if(e.cool>0)e.cool--; e.anim+=0.1;
+    const K=KIND[e.kind], dir=(e.wx>worldX)?-1:1;
+    if(e.state==='stagger'){ e.t++; if(e.t>32){e.state='approach';e.cool=16;} }
+    else if(e.state==='approach'){
+      if(Math.abs(enemyHead(e)-worldX)>STOPGAP){e.wx+=dir*K.spd;e.walked+=K.spd;}
+      else if(e.cool<=0){e.state='windup';e.t=0;}
+    } else if(e.state==='windup'){
+      e.t++;
+      if(e.t>K.wind){e.state='recover';e.t=0;
+        if(e.kind==='lunger')e.wx+=dir*64;                       // lunges in on the strike (must be dodged)
+        if(Math.abs(enemyHead(e)-worldX)<K.claw && invuln<=0 && jumpY>-H*.07){
+          hp-=1;invuln=42;shake=12;burst(px,baseY-H*.16,12,'255,80,80');updHUD();
+          worldX=Math.max(0,worldX-46);
+          if(hp<=0){running=false;gameOver(false);}}
+      }
+    } else if(e.state==='recover'){
+      e.t++;
+      if(e.t>14){
+        if(e.kind==='boss'){ if((e.seq=(e.seq||0)+1)<2){e.state='approach';e.cool=12;} else {e.seq=0;e.state='approach';e.cool=44;} }  // 2-hit combo
+        else {e.state='approach';e.cool=30;}
+      }
+    }
+  });
+  if(invuln>0)invuln--;
+  // win when the Black Knight falls
+  if(won&&boss&&boss.die>=1&&running){running=false;gameOver(true);}
+  // HUD: progress + boss bar
+  document.getElementById('barfill').style.width=Math.min(100,worldX/pathEnd*100)+'%';
+  const sf=document.getElementById('stamfill'); sf.style.width=stam+'%'; sf.classList.toggle('low',stam<ATK_COST);
+  const bb=document.getElementById('bossbar');
+  if(boss&&boss.state!=='wait'&&boss.state!=='dead'){bb.style.display='block';document.getElementById('bossfill').style.width=Math.max(0,boss.hp/boss.maxhp*100)+'%';}
+  else bb.style.display='none';
+  // particles
+  parts.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.vy+=0.3;p.life-=0.03;});
+  parts=parts.filter(p=>p.life>0);
+}
+
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  ctx.save();
+  if(shake>0){ctx.translate((Math.random()-.5)*shake,(Math.random()-.5)*shake);shake*=.85;if(shake<.4)shake=0;}
+  scene(worldX);
+  const px=PLAYER_X(),baseY=H*FEET;
+
+  // gate marker at end
+  const gx=px+(pathEnd-worldX);
+  if(gx<W+200){ctx.save();ctx.globalAlpha=.85;ctx.fillStyle='#ffd45e';ctx.font='bold 16px Trebuchet MS';
+    ctx.textAlign='center';ctx.fillText('⛬ THE GATE ⛬',gx,baseY-H*.3);ctx.restore();}
+
+  // enemies (black cats; rear back to telegraph, lunge on the strike)
+  enemies.forEach(e=>{
+    if(e.state==='wait')return;
+    const K=KIND[e.kind], isBoss=e.kind==='boss', windup=e.state==='windup', stag=e.state==='stagger';
+    const lean=((windup?9:0)+(e.state==='recover'?-18:0)+(stag?Math.sin(e.t*0.8)*5:0))*(isBoss?1.6:1);
+    const ex=px+(e.wx-worldX)+lean;
+    const dying=e.state==='dead', sc=K.sc;
+    ctx.save();
+    if(dying)ctx.globalAlpha=1-e.die;
+    shadow(ex,baseY,H*.42*sc*.32,0);
+    const pose=(Math.floor((e.walked||0)/EWSTRIDE)%2===0)?P('bk1'):P('bk2');
+    const flash=e.hitT>0&&((e.hitT/2|0)%2===0);
+    let tint=K.col;
+    if(flash)tint='rgba(255,255,255,.9)';
+    else if(windup)tint=(e.kind==='lunger')?('rgba(255,225,60,'+(0.5+0.3*Math.sin(e.t*0.6))+')'):('rgba(255,70,40,'+(0.4+0.3*Math.sin(e.t*0.5))+')');
+    else if(stag)tint='rgba(120,160,255,.45)';
+    const ebob=Math.sin(e.anim*2.0)*H*.008;
+    sprite(pose,ex,baseY+ebob+(dying?e.die*H*.04:0),sc,true,tint);
+    ctx.restore();
+  });
+
+  // player
+  const A=ANIM[anim],dur=A.f.length/(A.fps||6),tSec=animT/60;
+  let fi;
+  if(anim==='walk') fi=Math.floor(Math.abs(worldX)/HSTRIDE)%A.f.length;   // legs driven by distance, not time
+  else fi=A.mode==='loop'?Math.floor(tSec*A.fps)%A.f.length:(A.mode==='hold'?0:Math.min(A.f.length-1,Math.floor(tSec*A.fps)));
+  let xoff=0,yoff=jumpY;
+  if(anim==='walk')yoff+=Math.sin(animT*0.35)*H*.012;
+  if(anim==='attack')xoff=Math.sin(Math.min(1,tSec/dur)*Math.PI)*40;
+  const lift=Math.max(0,Math.min(1,-yoff/(H*.18)));
+  const flick=invuln>0&&((invuln/4|0)%2===0);
+  shadow(px,baseY,H*.42*.8*.32,lift);
+  if(!flick)sprite(A.f[fi],px+xoff,baseY+yoff,.8,false,null);
+
+  // particles
+  parts.forEach(p=>{ctx.globalAlpha=Math.max(0,p.life);ctx.fillStyle='rgb('+p.c+')';
+    ctx.fillRect(p.x-2,p.y-2,4,4);});ctx.globalAlpha=1;
+
+  ctx.restore();
+  // vignette
+  let g=ctx.createRadialGradient(W/2,H*.5,H*.32,W/2,H*.5,H*.82);
+  g.addColorStop(0,'rgba(0,0,0,0)');g.addColorStop(1,'rgba(2,4,10,.55)');ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+}
+
+function drawLoading(){
+  ctx.clearRect(0,0,W,H);ctx.fillStyle='#05070f';ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='#9fc0ff';ctx.font='15px Trebuchet MS';ctx.textAlign='center';
+  ctx.fillText('Loading art… '+loaded+'/'+total,W/2,H/2);
+  if(assetErr.length){ctx.fillStyle='#ff8a8a';
+    ctx.fillText('Failed: '+assetErr.length+' file(s) — '+assetErr[0],W/2,H/2+26);}
+}
+function loop(){
+  if(!ready&&loaded>=total)ready=true;
+  if(ready){ if(running)step(); draw(); }
+  else drawLoading();
+  requestAnimationFrame(loop);
+}
+reset(); running=false;     // initialise state so the scene draws behind the title screen
+loop();
+
+// ---------- screens ----------
+function gameOver(win){
+  document.getElementById('bossbar').style.display='none';
+  let badge='',col='#cfe0ff',msg='';
+  if(win){
+    if(hp>=MAXHP){badge='★ GOLD ★';col='#ffd45e';msg='Flawless — not a scratch on your fur.';}
+    else if(hp>=3){badge='SILVER';col='#cfe0ff';msg='A worthy victory for House Barkatheon.';}
+    else{badge='BRONZE';col='#e0a060';msg='Bloodied, but the gate is yours.';}
+  } else msg='House Whiskerly holds the road… for now.';
+  document.getElementById('endSub').textContent=win?'Victory':'Defeat';
+  document.getElementById('endTitle').textContent=win?'The Gate is Yours!':'Ser Biscuit has fallen…';
+  const bd=document.getElementById('endBadge');bd.textContent=badge;bd.style.color=col;bd.style.display=badge?'block':'none';
+  document.getElementById('endCard').innerHTML=
+    'Knights felled: <span class="v">'+felled+'</span><br>'+
+    'Hearts remaining: <span class="v">'+Math.max(0,hp)+' / '+MAXHP+'</span>'+
+    (win?'<br>The Black Knight: <span class="v">vanquished</span>':'');
+  document.getElementById('endMsg').textContent=msg;
+  document.getElementById('endBtn').textContent=win?'March again':'Try again';
+  document.getElementById('end').classList.remove('hide');
+}
+document.getElementById('startBtn').onclick=()=>{document.getElementById('start').classList.add('hide');reset();};
+document.getElementById('endBtn').onclick=()=>{document.getElementById('end').classList.add('hide');reset();};
+
+// ---------- input ----------
+const KEYMAP={ArrowLeft:'left',KeyA:'left',ArrowRight:'right',KeyD:'right',Space:'attack',KeyW:'jump',ArrowUp:'jump'};
+addEventListener('keydown',e=>{const k=KEYMAP[e.code];if(k){keys[k]=1;e.preventDefault();}});
+addEventListener('keyup',e=>{const k=KEYMAP[e.code];if(k){keys[k]=0;e.preventDefault();}});
+document.querySelectorAll('.key').forEach(b=>{const k=b.dataset.k;
+  const on=e=>{keys[k]=1;e.preventDefault();},offf=e=>{keys[k]=0;e.preventDefault();};
+  b.addEventListener('pointerdown',on);b.addEventListener('pointerup',offf);
+  b.addEventListener('pointerleave',offf);b.addEventListener('pointercancel',offf);});
+</script>
+</body>
+</html>
