@@ -5,7 +5,7 @@
      instead of the cached app shell (the multi-page PWA gotcha). Offline falls back to cache.
    - Static assets (icons/manifest): stale-while-revalidate.
    Bump CACHE to force-purge everything. */
-const CACHE = "nuzz-v6";
+const CACHE = "nuzz-v7";
 const ASSETS = [
   "/",
   "/index.html",
