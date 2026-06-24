@@ -27,7 +27,8 @@ export async function onRequestPost(context) {
     // allowlist and clamp each delta, so a tampered beacon can't invent counters or spike them.
     // (counters is a live cache; it can be re-derived from events — see tools/schema.sql.)
     if (b.inc && typeof b.inc === 'object') {
-      const ALLOW = new Set(['animals_saved','animals_lost','ufos_repelled','alien_runs','nuzz_runs']);
+      const ALLOW = new Set(['animals_saved','animals_lost','ufos_repelled','alien_runs','nuzz_runs',
+                             'aliens_blasted','kitty_runs','kitty_wins']);
       for (const k of Object.keys(b.inc)) {
         if (!ALLOW.has(k)) continue;
         const d = Math.max(0, Math.min(1000, Math.trunc(Number(b.inc[k]) || 0)));

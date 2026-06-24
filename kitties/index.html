@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#070b1c">
+<title>Space Force Kitties — Nuzz prototype</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
+  html,body{height:100%;overflow:hidden;background:#070b1c;font-family:'Comic Sans MS','Chalkboard SE',cursive,sans-serif;color:#fff;touch-action:none}
+  #wrap{position:fixed;inset:0}
+  canvas{display:block}
+  #hud{position:fixed;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:center;padding:11px 15px;pointer-events:none;z-index:5;font-weight:bold;text-shadow:0 2px 4px rgba(0,0,0,.6)}
+  #lives{font-size:18px;letter-spacing:1px;min-width:80px}
+  #weaponHud{font-size:14px;text-align:center;opacity:.95}
+  #weaponHud .wt{opacity:.7;font-size:12px}
+  #score{min-width:80px;text-align:right}
+  #score .sc{color:#ffd95e}
+  #bar{position:fixed;top:44px;left:14px;right:14px;z-index:5;pointer-events:none}
+  #barLabel{font-size:10px;letter-spacing:.18em;opacity:.7;margin:0 0 3px 2px;font-weight:bold}
+  #barTrack{height:9px;background:rgba(255,255,255,.12);border-radius:6px;overflow:hidden}
+  #barFill{height:100%;width:0;background:linear-gradient(90deg,#5cf0c0,#8ff0ff);border-radius:6px;transition:width .12s linear}
+  #barFill.boss{background:linear-gradient(90deg,#ff6a6a,#ff9e3c)}
+  #proto{position:fixed;bottom:7px;left:0;right:0;text-align:center;font-size:11px;letter-spacing:.15em;opacity:.4;z-index:5;pointer-events:none}
+  #hint{position:fixed;left:0;right:0;bottom:120px;text-align:center;font-size:15px;font-weight:bold;opacity:.9;z-index:5;pointer-events:none;text-shadow:0 2px 4px rgba(0,0,0,.6);transition:opacity .6s}
+  #warn{position:fixed;left:0;right:0;top:40%;text-align:center;font-size:27px;font-weight:bold;color:#ff8a8a;z-index:6;pointer-events:none;opacity:0;text-shadow:0 2px 10px rgba(0,0,0,.8);transition:opacity .25s}
+  #warn.show{opacity:1}
+  #end{position:fixed;inset:0;display:none;flex-direction:column;justify-content:flex-start;align-items:center;text-align:center;padding:30px;background:rgba(7,11,28,.92);z-index:10;overflow-y:auto;-webkit-overflow-scrolling:touch}
+  .endInner{margin:auto;display:flex;flex-direction:column;justify-content:center;align-items:center;width:100%;max-width:360px;padding:8px 0}
+  #end h2{font-size:27px;margin-bottom:10px;text-shadow:0 3px 0 rgba(0,0,0,.4);line-height:1.2}
+  #end p{max-width:330px;line-height:1.5;font-size:15px;margin-bottom:12px;opacity:.92}
+  .scorecard{font-size:14.5px;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:11px 18px;margin:2px 0 12px;line-height:1.6;max-width:330px}
+  .scorecard .scHead{font-size:11px;letter-spacing:.14em;text-transform:uppercase;opacity:.65;display:block;margin-bottom:3px}
+  #endWorld{font-size:14px;font-weight:bold;color:#9fe8c0;margin-bottom:6px;min-height:16px}
+  #kittyCta{max-width:330px;background:#ffd95e;color:#070b1c;border-radius:14px;padding:13px 18px;margin:6px 0 4px;font-size:15.5px;line-height:1.45;font-weight:bold;box-shadow:0 5px 12px rgba(0,0,0,.4)}
+  #kittyCta b{color:#b5471f}
+  .moreBlock{margin:22px 0 4px;width:100%;display:flex;flex-direction:column;align-items:center}
+  .moreHead{font-size:21px;font-weight:bold;color:#fff;text-shadow:0 2px 0 rgba(0,0,0,.4);margin-bottom:11px}
+  #kittyMore{display:flex;flex-direction:column;gap:9px;align-items:center;width:100%}
+  .morelink{display:inline-block;background:#fff;color:#16204a;border-radius:24px;padding:11px 30px;text-decoration:none;font-weight:bold;font-size:16px;box-shadow:0 4px 0 rgba(0,0,0,.28);min-width:230px;text-align:center}
+  .morelink:active{transform:translateY(2px);box-shadow:0 2px 0 rgba(0,0,0,.28)}
+  .finePrint{margin-top:20px;max-width:320px;font-size:10.5px;line-height:1.5;opacity:.5}
+  #end button{font-family:inherit;font-size:17px;font-weight:bold;color:#070b1c;background:#ffd95e;border:none;border-radius:26px;padding:13px 32px;cursor:pointer;box-shadow:0 5px 0 #c9a93f;margin-top:18px}
+  #end button:active{transform:translateY(3px);box-shadow:0 2px 0 #c9a93f}
+  #err{position:fixed;inset:0;display:none;justify-content:center;align-items:center;text-align:center;padding:30px;z-index:20;font-size:15px;line-height:1.6}
+  #start{position:fixed;inset:0;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:24px;background:radial-gradient(circle at 50% 30%,#14224d,#070b1c 72%);z-index:15;overflow-y:auto}
+  #start h2{font-size:27px;margin-bottom:10px;text-shadow:0 3px 0 rgba(0,0,0,.4)}
+  #start p{max-width:330px;line-height:1.5;font-size:14.5px;margin-bottom:13px;opacity:.92}
+  .pickHead{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.65;margin-bottom:8px}
+  #picker{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;max-width:340px;margin-bottom:18px}
+  .kbtn{background:rgba(255,255,255,.05);border:2px solid transparent;border-radius:16px;padding:9px 7px 7px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;width:150px}
+  .kbtn.sel{border-color:#ffd95e;background:rgba(255,217,94,.14)}
+  .kface{width:96px;height:96px;border-radius:14px;object-fit:cover;background:rgba(255,255,255,.04)}
+  img.kportrait{box-shadow:0 4px 12px rgba(0,0,0,.4)}
+  .kname{font-size:13px;font-weight:bold;opacity:.92;line-height:1.15;text-align:center}
+  .kname .kfull{display:block;font-size:9.5px;opacity:.6;font-weight:normal;margin-top:1px}
+  #endKitty{width:120px;height:120px;border-radius:18px;object-fit:cover;margin-bottom:12px;display:none;box-shadow:0 6px 20px rgba(0,0,0,.55);border:2px solid rgba(255,255,255,.22)}
+  #start button{font-family:inherit;font-size:18px;font-weight:bold;color:#070b1c;background:#ffd95e;border:none;border-radius:28px;padding:14px 40px;cursor:pointer;box-shadow:0 5px 0 #c9a93f}
+  #start button:active{transform:translateY(3px);box-shadow:0 2px 0 #c9a93f}
+  #tiltNote{margin-top:13px;font-size:12px;opacity:.5;max-width:300px;line-height:1.4}
+  #startWorld{margin-top:16px;font-size:13.5px;font-weight:bold;color:#9fe8c0;min-height:16px;max-width:300px;line-height:1.4}
+</style>
+</head>
+<body>
+<div id="wrap"></div>
+<div id="hud">
+  <div id="lives">❤️❤️❤️</div>
+  <div id="weaponHud"><span id="wIcon">🔫</span> <span id="wName">Blaster</span> <span class="wt" id="wTimer"></span></div>
+  <div id="score">🌟 <span class="sc" id="scoreN">0</span></div>
+</div>
+<div id="bar"><div id="barLabel">SECTOR</div><div id="barTrack"><div id="barFill"></div></div></div>
+<div id="warn">⚠ MOTHERSHIP INBOUND</div>
+<div id="hint">Tap to blast · tilt to steer left &amp; right · grab ✦ power-ups and ❤️ repairs!</div>
+<div id="proto">PROTOTYPE · PixiJS / WebGL</div>
+
+<div id="end"><div class="endInner">
+  <img id="endKitty" alt="">
+  <h2 id="endTitle">🚀</h2>
+  <p id="endBlurb"></p>
+  <div class="scorecard"><span class="scHead">Mission scorecard</span><span id="scLine">—</span></div>
+  <div id="endWorld"></div>
+  <div id="kittyCta">📸 Screenshot this scorecard, post it on <b>Instagram</b> or <b>TikTok</b> &amp; tag <b>@nuzz.pet</b> to enter the gift-card giveaway!</div>
+  <div class="moreBlock"><div class="moreHead">Play the other levels</div><div id="kittyMore"></div></div>
+  <button onclick="location.reload()">Play again</button>
+  <div class="finePrint">No purchase necessary. Tag <b>@nuzz.pet</b> in your public post to enter; winner drawn monthly &amp; notified by DM. 18+ or with a guardian's OK. Not sponsored by or affiliated with Instagram or TikTok.</div>
+</div></div>
+
+<div id="err">Couldn't load the graphics engine (PixiJS CDN). Check your connection and reload.</div>
+
+<div id="start">
+  <h2>🐱🚀 Space Force Kitties</h2>
+  <p id="startBlurb">Hover above your planet, blast the swarm raining down, grab power-ups &amp; repairs, and take down the mothership.</p>
+  <div class="pickHead">Pick your astro-kitty</div>
+  <div id="picker"></div>
+  <button id="startBtn">Launch 🚀</button>
+  <button onclick="location.href='/kitties/coop/'" style="display:block;margin:12px auto 0;font-family:inherit;font-size:18px;font-weight:bold;color:#16204a;background:#bcd2ff;border:none;border-radius:28px;padding:14px 40px;cursor:pointer;box-shadow:0 5px 0 #6f86b8">👯 Multiplayer</button>
+  <div id="tiltNote"></div>
+  <div id="startWorld"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/pixi.js@7/dist/pixi.min.js"></script>
+<script>
+(function(){
+if(!window.PIXI){ document.getElementById('err').style.display='flex'; return; }
+
+function track(ev,props){ try{
+  var b=JSON.stringify(Object.assign({ev:ev,level:'kitties-proto',t:Date.now()},props||{}));
+  if(navigator.sendBeacon) navigator.sendBeacon('/api/e',new Blob([b],{type:'application/json'}));
+}catch(e){} }
+
+const app = new PIXI.Application({ resizeTo: window, backgroundColor: 0x070b1c, antialias: true,
+  resolution: Math.min(window.devicePixelRatio||1, 2), autoDensity: true });
+document.getElementById('wrap').appendChild(app.view);
+const S = app.screen;
+
+const L = {};
+['bg','planet','glow','asteroid','pickup','alien','boss','bolt','kitty','fx','none'].forEach(k=>{ L[k]=new PIXI.Container(); app.stage.addChild(L[k]); });
+
+/* ---- color helpers ---- */
+function darken(n,f){ let r=(n>>16)&255,g=(n>>8)&255,b=n&255; return (Math.round(r*(1-f))<<16)|(Math.round(g*(1-f))<<8)|Math.round(b*(1-f)); }
+function css(n){ return '#'+(n>>>0).toString(16).padStart(6,'0').slice(-6); }
+
+function glowTexture(size){ const c=document.createElement('canvas'); c.width=c.height=size; const cx=c.getContext('2d');
+  const grd=cx.createRadialGradient(size/2,size/2,0,size/2,size/2,size/2);
+  grd.addColorStop(0,'rgba(255,255,255,0.95)'); grd.addColorStop(0.45,'rgba(255,255,255,0.30)'); grd.addColorStop(1,'rgba(255,255,255,0)');
+  cx.fillStyle=grd; cx.fillRect(0,0,size,size); return PIXI.Texture.from(c); }
+const TEX_GLOW = glowTexture(256);
+
+/* ---- optional painted sprites (loaded if present in /assets/sprites, else we draw vector) ----
+   AV = asset cache-buster: bump it whenever art changes so the service worker fetches fresh. */
+const AV='?v=10';
+const SPRITES={};
+function loadSprite(id){ if(id in SPRITES) return; SPRITES[id]=null;
+  PIXI.Texture.fromURL('assets/sprites/'+id+'.png'+AV).then(t=>{ SPRITES[id]=t; }).catch(()=>{}); }
+['boss','rock1','rock2','rock3','missile','alien'].forEach(loadSprite);
+
+/* ---- roster ---- */
+const KITTIES = [
+  {id:'cheeto',    nick:'Cheeto',    full:'Chester “Cheeto” Johnson', body:0xf2952f, belly:0xffe6c2, ear:0xe8838f, eye:0x49c46a, pattern:'tabby', rim:0xff9a3c},
+  {id:'major-tom', nick:'Major Tom', full:'Major “Tom” Whiskerton',   body:0x8c98a6, belly:0xdfe6ed, ear:0xf0a9b4, eye:0x6fd0ff, pattern:'tabby', rim:0x5ec8ff},
+  {id:'tabby',     nick:'Tabby',     full:'Neil deGrasse “Tabby”',    body:0x7a5a3c, belly:0xe9d8bf, ear:0xd79aa3, eye:0x49c46a, pattern:'tabby', rim:0xffc94a},
+  {id:'moonpie',   nick:'Moonpie',   full:'Luna “Moonpie” Marlowe',   body:0xeaddc4, belly:0xfff7ea, ear:0xd79aa3, eye:0x4aa6ff, pattern:'point', rim:0xff7ad0},
+];
+let sel=0; try{ const s=parseInt(localStorage.getItem('nuzz:kitty')); if(s>=0&&s<KITTIES.length) sel=s; }catch(e){}
+
+/* ---- detailed vintage-astro headshot (picker) ---- */
+function drawHead(cv,k){
+  const ctx=cv.getContext('2d'), W=cv.width; ctx.clearRect(0,0,W,W);
+  const cx=W*0.5, cy=W*0.54, R=W*0.27;
+  const body=css(k.body), belly=css(k.belly), ear=css(k.ear), dk=css(darken(k.body,0.24)), face=k.pattern==='point'?css(darken(k.body,0.34)):body, rim=css(k.rim);
+  // cosmic glow backdrop (matches the reference art)
+  const bg=ctx.createRadialGradient(cx,cy-R*0.2,2,cx,cy,W*0.62); bg.addColorStop(0,rim+'66'); bg.addColorStop(0.6,rim+'18'); bg.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=bg; ctx.fillRect(0,0,W,W);
+  // ears
+  function drawEar(s){ ctx.fillStyle=body; ctx.beginPath(); ctx.moveTo(cx+s*R*0.55,cy-R*0.78); ctx.lineTo(cx+s*R*1.05,cy-R*1.5); ctx.lineTo(cx+s*R*1.18,cy-R*0.55); ctx.closePath(); ctx.fill();
+    ctx.fillStyle=ear; ctx.beginPath(); ctx.moveTo(cx+s*R*0.72,cy-R*0.82); ctx.lineTo(cx+s*R*0.98,cy-R*1.28); ctx.lineTo(cx+s*R*1.04,cy-R*0.66); ctx.closePath(); ctx.fill(); }
+  drawEar(-1); drawEar(1);
+  // head
+  ctx.fillStyle=face; ctx.beginPath(); ctx.arc(cx,cy,R,0,7); ctx.fill();
+  // pattern + rim-light, clipped to the head
+  ctx.save(); ctx.beginPath(); ctx.arc(cx,cy,R,0,7); ctx.clip();
+  if(k.pattern==='tabby'){ ctx.fillStyle=dk; ctx.fillRect(cx-2,cy-R,4,R*0.7); ctx.fillRect(cx-R*0.5,cy-R*0.95,3,R*0.5); ctx.fillRect(cx+R*0.4,cy-R*0.95,3,R*0.5); ctx.fillRect(cx-R*0.85,cy-R*0.45,R*0.45,3); ctx.fillRect(cx+R*0.45,cy-R*0.45,R*0.45,3); }
+  if(k.pattern==='tuxedo'){ ctx.fillStyle=belly; ctx.beginPath(); ctx.ellipse(cx,cy+R*0.5,R*0.5,R*0.6,0,0,7); ctx.fill(); }
+  ctx.fillStyle='rgba(255,255,255,.16)'; ctx.beginPath(); ctx.ellipse(cx,cy-R*0.55,R*0.85,R*0.45,0,0,7); ctx.fill();   // warm top rim-light
+  ctx.restore();
+  // muzzle
+  ctx.fillStyle=belly; ctx.beginPath(); ctx.ellipse(cx,cy+R*0.4,R*0.55,R*0.45,0,0,7); ctx.fill();
+  // big expressive eyes
+  const ex=R*0.44, ey=cy-R*0.02, er=R*0.32;
+  [-1,1].forEach(s=>{ ctx.fillStyle='#fff'; ctx.beginPath(); ctx.ellipse(cx+s*ex,ey,er*0.95,er*1.05,0,0,7); ctx.fill();
+    ctx.fillStyle=css(k.eye); ctx.beginPath(); ctx.arc(cx+s*ex,ey,er*0.7,0,7); ctx.fill();
+    ctx.fillStyle='#10131c'; ctx.beginPath(); ctx.arc(cx+s*ex,ey,er*0.38,0,7); ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,.95)'; ctx.beginPath(); ctx.arc(cx+s*ex-er*0.22,ey-er*0.26,er*0.18,0,7); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx+s*ex+er*0.2,ey+er*0.16,er*0.08,0,7); ctx.fill(); });
+  // nose + mouth
+  ctx.fillStyle='#ff8fa3'; ctx.beginPath(); ctx.moveTo(cx-3.5,cy+R*0.26); ctx.lineTo(cx+3.5,cy+R*0.26); ctx.lineTo(cx,cy+R*0.42); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle='rgba(70,35,45,.5)'; ctx.lineWidth=1.4; ctx.beginPath(); ctx.moveTo(cx,cy+R*0.42); ctx.quadraticCurveTo(cx-5,cy+R*0.58,cx-9,cy+R*0.5); ctx.moveTo(cx,cy+R*0.42); ctx.quadraticCurveTo(cx+5,cy+R*0.58,cx+9,cy+R*0.5); ctx.stroke();
+  // whiskers
+  ctx.strokeStyle='rgba(255,255,255,.6)'; ctx.lineWidth=1;
+  [-1,1].forEach(s=>{ for(let i=0;i<2;i++){ ctx.beginPath(); ctx.moveTo(cx+s*R*0.34,cy+R*0.32+i*4); ctx.lineTo(cx+s*R*1.0,cy+R*0.22+i*8); ctx.stroke(); } });
+  // white/metal suit collar with a mission light
+  ctx.fillStyle='#e9eef3'; ctx.beginPath(); ctx.ellipse(cx,cy+R*1.02,R*1.0,R*0.36,0,0,Math.PI); ctx.fill();
+  ctx.fillStyle='#aeb7c1'; ctx.beginPath(); ctx.ellipse(cx,cy+R*1.02,R*1.0,R*0.18,0,0,Math.PI); ctx.fill();
+  ctx.fillStyle=rim; ctx.beginPath(); ctx.arc(cx,cy+R*1.05,2.6,0,7); ctx.fill();
+  // fishbowl helmet with a glowing neon rim
+  ctx.save(); ctx.shadowColor=rim; ctx.shadowBlur=W*0.13; ctx.strokeStyle=rim; ctx.lineWidth=3.4; ctx.beginPath(); ctx.arc(cx,cy-R*0.08,R*1.34,0,7); ctx.stroke(); ctx.restore();
+  ctx.strokeStyle='rgba(255,255,255,.85)'; ctx.lineWidth=1.4; ctx.beginPath(); ctx.arc(cx,cy-R*0.08,R*1.34,0,7); ctx.stroke();
+  const hg=ctx.createRadialGradient(cx-R*0.5,cy-R*0.7,2,cx,cy-R*0.08,R*1.34);
+  hg.addColorStop(0,'rgba(255,255,255,.26)'); hg.addColorStop(0.5,'rgba(200,235,255,.04)'); hg.addColorStop(1,'rgba(150,200,255,.14)');
+  ctx.fillStyle=hg; ctx.beginPath(); ctx.arc(cx,cy-R*0.08,R*1.34,0,7); ctx.fill();
+  ctx.strokeStyle='rgba(255,255,255,.6)'; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(cx,cy-R*0.08,R*1.08,Math.PI*1.12,Math.PI*1.52); ctx.stroke();
+  // antenna
+  ctx.strokeStyle='#c2ccd6'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(cx+R*0.72,cy-R*1.28); ctx.lineTo(cx+R*0.98,cy-R*1.74); ctx.stroke();
+  ctx.fillStyle=rim; ctx.beginPath(); ctx.arc(cx+R*1.02,cy-R*1.82,3,0,7); ctx.fill();
+}
+
+/* ---- layout: kitty hovers near the bottom, moves left/right ---- */
+let KY, topMargin=66, sideM=30;
+function layout(){ KY=S.height*0.82; }
+layout();
+
+/* ---- background: starfield scrolls DOWN (sells upward flight) + planet at the bottom ---- */
+const stars=[]; const starG=new PIXI.Graphics(); L.bg.addChild(starG);
+function buildStars(){ stars.length=0; for(let i=0;i<120;i++) stars.push({x:Math.random()*S.width,y:Math.random()*S.height,z:0.35+Math.random()*1.1,r:Math.random()*1.3+0.4}); }
+let neb1,neb2;
+function buildNebula(){ [neb1,neb2].forEach(n=>{ if(n) L.bg.removeChild(n); });
+  neb1=new PIXI.Sprite(TEX_GLOW); neb1.anchor.set(0.5); neb1.tint=0x4a2a7a; neb1.alpha=0.35; neb1.blendMode=PIXI.BLEND_MODES.ADD; neb1.scale.set(S.height/120); neb1.x=S.width*0.7; neb1.y=S.height*0.35; L.bg.addChildAt(neb1,0);
+  neb2=new PIXI.Sprite(TEX_GLOW); neb2.anchor.set(0.5); neb2.tint=0x123a5a; neb2.alpha=0.30; neb2.blendMode=PIXI.BLEND_MODES.ADD; neb2.scale.set(S.height/90); neb2.x=S.width*0.3; neb2.y=S.height*0.6; L.bg.addChildAt(neb2,0); }
+const planet=new PIXI.Graphics(), planetGlow=new PIXI.Sprite(TEX_GLOW);
+planetGlow.anchor.set(0.5); planetGlow.tint=0x6fa0ff; planetGlow.alpha=0.5; planetGlow.blendMode=PIXI.BLEND_MODES.ADD; L.glow.addChild(planetGlow); L.planet.addChild(planet);
+function buildPlanet(){ const R=Math.max(S.width*0.9,300), cx=S.width*0.5, cy=S.height*0.97+R; planet.clear();
+  planet.beginFill(0x244a86).drawCircle(cx,cy,R).endFill(); planet.beginFill(0x2f5fa6).drawCircle(cx,cy,R*0.99).endFill();
+  planet.beginFill(0x3a7a5a,0.9).drawEllipse(cx-R*0.3,cy-R*0.92,R*0.18,R*0.05).endFill();
+  planet.beginFill(0x3a7a5a,0.9).drawEllipse(cx+R*0.28,cy-R*0.9,R*0.14,R*0.05).endFill();
+  planet.beginFill(0x9fc4ff,0.45).drawEllipse(cx,cy-R*0.97,R*0.5,R*0.04).endFill();
+  planetGlow.x=cx; planetGlow.y=cy-R; planetGlow.scale.set((R*1.8)/256); }
+function buildBackground(){ buildStars(); buildNebula(); buildPlanet(); }
+buildBackground();
+/* painted nebula backdrop (cropped from the art) behind the starfield */
+let bgSprite=null;
+function fitBg(){ if(!bgSprite) return; const t=bgSprite.texture, sc=Math.max(S.width/t.width,S.height/t.height); bgSprite.scale.set(sc); bgSprite.x=S.width/2; bgSprite.y=S.height/2; }
+PIXI.Texture.fromURL('assets/bg.jpg'+AV).then(tex=>{ bgSprite=new PIXI.Sprite(tex); bgSprite.anchor.set(0.5); bgSprite.alpha=0.62; L.bg.addChildAt(bgSprite,0); fitBg(); }).catch(()=>{});
+window.addEventListener('resize',()=>{ layout(); buildBackground(); fitBg(); if(kitty) kitty.y=KY; });
+
+/* ---- the jetpack astro-kitty (BACK view — he's facing up, focused on the planet) ---- */
+function buildKitty(c){
+  const C=new PIXI.Container();
+  // soft helmet halo behind everything (the neon-rim look from the references)
+  const ring=new PIXI.Sprite(TEX_GLOW); ring.anchor.set(0.5); ring.tint=c.rim; ring.alpha=0.4; ring.scale.set(0.5); ring.y=-10; ring.blendMode=PIXI.BLEND_MODES.ADD; C.addChild(ring);
+  const flame=new PIXI.Graphics(); flame.blendMode=PIXI.BLEND_MODES.ADD; C.addChild(flame);
+  const g=new PIXI.Graphics();
+  const dk=darken(c.body,0.22), dk2=darken(c.body,0.32);
+  // thrusters (bottom)
+  g.beginFill(0x44485a).drawRoundedRect(-15,11,11,13,3).drawRoundedRect(4,11,11,13,3).endFill();
+  // tail curling out behind
+  g.lineStyle(5,c.body); g.moveTo(2,18); g.quadraticCurveTo(18,22,19,9); g.lineStyle(0);
+  // torso (seen from the back)
+  g.beginFill(c.body).drawEllipse(0,4,18,16).endFill();
+  if(c.pattern==='tabby'){ g.beginFill(dk); g.drawRect(-1.5,-8,3,22).drawRect(-9,-1,3,11).drawRect(6,-1,3,11); g.endFill(); }
+  if(c.pattern==='tuxedo'){ g.beginFill(c.belly).drawEllipse(0,12,8,7).endFill(); }
+  // raised paws + ray-gun blaster pointing up
+  g.beginFill(c.body).drawEllipse(-12,-12,5,7).drawEllipse(12,-12,5,7).endFill();
+  g.beginFill(0xd9663a).drawRoundedRect(-5,-32,10,18,3).endFill();
+  g.beginFill(0xe8854f).drawRoundedRect(-3,-39,6,11,2).endFill();
+  g.beginFill(0x8ff0ff).drawCircle(0,-40,2.8).endFill();
+  // back of the head
+  g.beginFill(c.body).drawCircle(0,-10,14).endFill();
+  if(c.pattern==='tabby'){ g.beginFill(dk); g.drawRect(-1.5,-23,3,13).drawRect(-7,-20,2.4,9).drawRect(5,-20,2.4,9); g.endFill(); }
+  // ears (back of)
+  g.beginFill(c.body).drawPolygon([-12,-18,-16,-31,-4,-21]).endFill();
+  g.beginFill(c.body).drawPolygon([12,-18,16,-31,4,-21]).endFill();
+  g.beginFill(dk2).drawPolygon([-11,-20,-13,-27,-7,-21]).endFill();
+  g.beginFill(dk2).drawPolygon([11,-20,13,-27,7,-21]).endFill();
+  C.addChild(g);
+  // fishbowl helmet with a glowing rim + antenna
+  const h=new PIXI.Graphics();
+  h.beginFill(0xbfeaff,0.10).drawCircle(0,-10,20).endFill();
+  h.lineStyle(3,c.rim,0.9).drawCircle(0,-10,20);
+  h.lineStyle(1.4,0xffffff,0.6).drawCircle(0,-10,20.6);
+  h.lineStyle(3,0xffffff,0.4).arc(0,-10,16,Math.PI*0.18,Math.PI*0.55); h.lineStyle(0);
+  h.lineStyle(2,0xc2ccd6).moveTo(13,-24); h.lineTo(18,-32); h.lineStyle(0);
+  h.beginFill(c.rim).drawCircle(19,-33,2.6).endFill();
+  C.addChild(h);
+  C.flame=flame;
+  return C;
+}
+// painted transparent-PNG sprite version of the kitty (used if assets/sprites/<id>.png exists)
+function buildKittySprite(tex,c){
+  const C=new PIXI.Container();
+  const ring=new PIXI.Sprite(TEX_GLOW); ring.anchor.set(0.5); ring.tint=c.rim; ring.alpha=0.4; ring.scale.set(0.72); ring.blendMode=PIXI.BLEND_MODES.ADD; C.addChild(ring);
+  const flame=new PIXI.Graphics(); flame.blendMode=PIXI.BLEND_MODES.ADD; C.addChild(flame);
+  const s=new PIXI.Sprite(tex); s.anchor.set(0.5,0.46); const targetH=96; s.scale.set(targetH/tex.height); C.addChild(s);
+  C.flame=flame; C.spriteH=targetH; C.noFlame=true; return C;   // painted sprite already has its own thrusters
+}
+let kitty=null, kittyR=25, kMuzzleDY=44, kFlameY=22;
+function spawnKitty(){
+  const c=KITTIES[sel];
+  if(kitty) L.kitty.removeChild(kitty);
+  kitty=buildKitty(c); kitty.scale.set(1.15); kitty.x=S.width/2; kitty.y=KY; L.kitty.addChild(kitty);
+  kittyR=25; kMuzzleDY=44; kFlameY=22;
+  // upgrade to the painted sprite if one exists (swaps in on load, keeps position)
+  PIXI.Texture.fromURL('assets/sprites/'+c.id+'.png'+AV).then(tex=>{
+    const old=kitty, x=old.x, y=old.y; kitty=buildKittySprite(tex,c); kitty.x=x; kitty.y=y;
+    L.kitty.addChild(kitty); L.kitty.removeChild(old);
+    kittyR=32; kMuzzleDY=kitty.spriteH*0.5; kFlameY=kitty.spriteH*0.42;
+  }).catch(()=>{});
+}
+
+/* ---- weapons (fire UP) ---- */
+const bolts=[];
+function muzzle(){ return {x:kitty.x, y:kitty.y-kMuzzleDY}; }
+function spawnBolt(x,y,vx,vy,dmg,w,h,color){ const g=new PIXI.Graphics(); g.blendMode=PIXI.BLEND_MODES.ADD;
+  g.beginFill(color).drawEllipse(0,0,w,h).endFill(); g.beginFill(0xffffff).drawEllipse(0,0,w*0.55,h*0.55).endFill();
+  g.rotation=Math.atan2(vy,vx); g.x=x; g.y=y; L.bolt.addChild(g); bolts.push({gfx:g,x:x,y:y,vx:vx||0,vy:vy,dmg:dmg}); }
+function fBlaster(){ const m=muzzle(); spawnBolt(m.x,m.y,0,-9,1,9,3,0x8ff0ff); burst(m.x,m.y,3,0x8ff0ff); }
+function fSpread(){ const m=muzzle(); [-2.4,0,2.4].forEach(vx=>spawnBolt(m.x,m.y,vx,-8.6,1,8,3,0xffd36c)); burst(m.x,m.y,4,0xffd36c); }
+function fRapid(){ const m=muzzle(); spawnBolt(m.x,m.y,0,-12,1,7,2.4,0x9effb0); burst(m.x,m.y,2,0x9effb0); }
+function fHeavy(){ const m=muzzle(); spawnBolt(m.x,m.y,0,-7,4,15,6,0xff6ad0); burst(m.x,m.y,6,0xff6ad0); }
+const WEAPONS={
+  blaster:{name:'Blaster', icon:'🔫', cd:15, make:fBlaster, temp:false},
+  spread: {name:'Spread',  icon:'✦',  cd:22, make:fSpread,  temp:true, dur:15*60},
+  rapid:  {name:'Rapid',   icon:'⚡', cd:6,  make:fRapid,   temp:true, dur:13*60},
+  heavy:  {name:'Heavy',   icon:'💥', cd:32, make:fHeavy,   temp:true, dur:15*60},
+};
+
+/* ---- pickups (fall down) ---- */
+const pickups=[];
+const PICKUPS={ health:{icon:'❤️',color:0xff6a8a}, spread:{icon:'✦',color:0xffd36c}, rapid:{icon:'⚡',color:0x9effb0}, heavy:{icon:'💥',color:0xff6ad0} };
+function makePickup(kind,x,y){ const cfg=PICKUPS[kind]; const c=new PIXI.Container();
+  const glow=new PIXI.Sprite(TEX_GLOW); glow.anchor.set(0.5); glow.tint=cfg.color; glow.alpha=0.75; glow.scale.set(0.42); glow.blendMode=PIXI.BLEND_MODES.ADD; c.addChild(glow);
+  const disc=new PIXI.Graphics(); disc.beginFill(0x0c1330,0.85).drawCircle(0,0,15).endFill(); disc.lineStyle(2,cfg.color,0.9).drawCircle(0,0,15); c.addChild(disc);
+  const txt=new PIXI.Text(cfg.icon,{fontFamily:'sans-serif',fontSize:18,fill:0xffffff}); txt.anchor.set(0.5); c.addChild(txt);
+  c.x = x!=null?x:(sideM+Math.random()*(S.width-2*sideM)); c.y = y!=null?y:-26; L.pickup.addChild(c);
+  pickups.push({gfx:c,bx:c.x,y:c.y,ph:Math.random()*6,r:17,kind:kind}); }
+
+/* ---- particles ---- */
+const parts=[];
+function burst(x,y,n,color){ for(let i=0;i<n;i++){ const p=new PIXI.Graphics(); p.beginFill(color).drawCircle(0,0,2+Math.random()*3).endFill(); p.x=x; p.y=y; p.blendMode=PIXI.BLEND_MODES.ADD;
+  L.fx.addChild(p); const a=Math.random()*Math.PI*2,s=2+Math.random()*4.5; parts.push({gfx:p,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:1}); } }
+
+/* ---- explosion VFX: flying chunks, shockwave rings, white flash, screen shake ---- */
+const chunks=[], rings=[]; let shake=0;
+const flashG=new PIXI.Graphics(); flashG.alpha=0; L.none.addChild(flashG);
+function flash(a){ flashG.clear(); flashG.beginFill(0xffffff).drawRect(0,0,S.width,S.height).endFill(); flashG.alpha=a; }
+function ring(x,y){ const g=new PIXI.Graphics(); g.blendMode=PIXI.BLEND_MODES.ADD; L.fx.addChild(g); rings.push({gfx:g,x:x,y:y,r:8,life:1}); }
+
+/* ---- aliens (spawn top, fall down; weave horizontally) ---- */
+const aliens=[];
+function makeAlien(fromBoss){
+  const r=Math.random(); let type;
+  if(progress>0.3 && r < 0.16+progress*0.22) type='brute';
+  else if(r < 0.32+progress*0.28) type='zip';
+  else type='scout';
+  const fast = type==='zip';
+  const c=new PIXI.Container();
+  const glow=new PIXI.Sprite(TEX_GLOW); glow.anchor.set(0.5); glow.scale.set(type==='brute'?0.62:0.46);
+  glow.tint = type==='brute'?0x9aa0ac : (fast?0xff6a6a:0x9c6cff); glow.blendMode=PIXI.BLEND_MODES.ADD; c.addChild(glow);
+  if(SPRITES.alien){
+    const sp=new PIXI.Sprite(SPRITES.alien); sp.anchor.set(0.5); sp.rotation=Math.PI;   // nose-down, diving at you
+    const R0= type==='brute'?56:(fast?34:44); sp.scale.set(R0/Math.max(SPRITES.alien.width,SPRITES.alien.height));
+    sp.tint = type==='brute'?0xc6ced8:(fast?0xff9a9a:0xffffff); c.addChild(sp);
+  } else {
+    const g=new PIXI.Graphics();
+    if(type==='brute'){
+      g.beginFill(0x70757f).drawEllipse(0,0,26,12).endFill();
+      g.beginFill(0x9aa0ac).drawEllipse(0,5,16,11).endFill();
+      g.beginFill(0x3a3d44).drawEllipse(0,7,9,6).endFill();
+      g.beginFill(0xff3344).drawCircle(0,7,2.4).endFill();
+      g.lineStyle(3,0x5a5e66); g.drawEllipse(0,0,26,12); g.lineStyle(0);
+      for(let i=-2;i<=2;i++) g.beginFill(0xffc94a).drawCircle(i*10,-4,2).endFill();
+    } else {
+      g.beginFill(fast?0xff8a7a:0x9fb6c8).drawEllipse(0,0,fast?16:20,fast?7:9).endFill();
+      g.beginFill(fast?0xffd0c0:0xc9dbe8).drawEllipse(0,5,fast?9:11,fast?7:8).endFill();
+      g.beginFill(0xff3344).drawCircle(-3.5,5,2).drawCircle(3.5,5,2).endFill();
+      for(let i=-1;i<=1;i++) g.beginFill(0x6cf0c0).drawCircle(i*8,-3,1.8).endFill();
+    }
+    c.addChild(g);
+  }
+  const x = fromBoss ? boss.x : sideM+Math.random()*(S.width-2*sideM);
+  c.x=x; c.y = fromBoss ? boss.y : -30; L.alien.addChild(c);
+  const base = type==='brute'?0.6 : (fast?1.7:1.0);
+  aliens.push({gfx:c, glow:glow, bx:x, y:c.y, ph:Math.random()*6, amp: type==='brute'?9:(fast?18:34),
+    vy:(base + progress*0.9 + Math.random()*0.5), r: type==='brute'?22:(fast?13:17),
+    hp: type==='brute'?4:1, type:type, hit:0 }); }
+
+/* ---- boss mothership (enters from top, fires down) ---- */
+let boss=null, bossHP=0, bossMax=72, bossFireT=110, bossSpawnT=300, bossHit=0;
+const bossBolts=[];
+function spawnBoss(){ const c=new PIXI.Container();
+  const glow=new PIXI.Sprite(TEX_GLOW); glow.anchor.set(0.5); glow.tint=0xff7acc; glow.alpha=0.6; glow.scale.set(0.95); glow.blendMode=PIXI.BLEND_MODES.ADD; c.addChild(glow);
+  let bw;
+  if(SPRITES.boss){ const s=new PIXI.Sprite(SPRITES.boss); s.anchor.set(0.5); const tw=Math.min(220,S.width*0.56); s.scale.set(tw/SPRITES.boss.width); c.addChild(s); bw=tw; glow.scale.set(tw/200); }
+  else {
+    const g=new PIXI.Graphics();
+    g.beginFill(0x6a4a8a).drawEllipse(0,0,72,27).endFill();
+    g.beginFill(0x8a6ab0).drawEllipse(0,14,42,20).endFill();
+    g.beginFill(0xb59ad6).drawEllipse(0,20,22,12).endFill();
+    g.beginFill(0xff3344).drawCircle(-10,18,3).drawCircle(10,18,3).endFill();
+    for(let i=-3;i<=3;i++) g.beginFill(0x6cf0c0).drawCircle(i*16,-8,3).endFill();
+    g.beginFill(0x3a2a4a).drawRoundedRect(-60,-18,14,12,3).drawRoundedRect(46,-18,14,12,3).endFill();
+    c.addChild(g); bw=144;
+  }
+  c.x=S.width/2; c.y=-90; L.boss.addChild(c);
+  boss=c; boss.bx=S.width/2; boss.ty=topMargin+S.height*0.15; boss.r=bw*0.42; bossHP=bossMax;
+  boss.tex=SPRITES.boss||null; boss.dispScale=SPRITES.boss?(Math.min(220,S.width*0.56)/SPRITES.boss.width):0; }
+function bossShoot(){ const mx=boss.x, my=boss.y+24; const dx=kitty.x-mx, dy=kitty.y-my, d=Math.hypot(dx,dy)||1, sp=4.0; let g, r=6;
+  if(SPRITES.missile){ g=new PIXI.Sprite(SPRITES.missile); g.anchor.set(0.5); g.scale.set(34/Math.max(SPRITES.missile.width,SPRITES.missile.height)); g.rotation=Math.atan2(dy,dx)+Math.PI/2; r=9; }
+  else { g=new PIXI.Graphics(); g.blendMode=PIXI.BLEND_MODES.ADD; g.beginFill(0xff5ea0).drawCircle(0,0,6).endFill(); g.beginFill(0xffffff).drawCircle(0,0,2.6).endFill(); }
+  g.x=mx; g.y=my; L.bolt.addChild(g); bossBolts.push({gfx:g,x:mx,y:my,vx:dx/d*sp,vy:dy/d*sp,r:r}); }
+function killBoss(){ won=true; const bx=boss?boss.x:S.width/2, by=boss?boss.y:S.height*0.2;
+  // shatter the painted mothership into a grid of chunks that blast apart
+  if(boss && boss.tex){ const tex=boss.tex, ds=boss.dispScale, cols=5, rows=4, cw=tex.width/cols, ch=tex.height/rows;
+    for(let i=0;i<cols;i++) for(let j=0;j<rows;j++){
+      const ct=new PIXI.Texture(tex.baseTexture, new PIXI.Rectangle(i*cw,j*ch,cw,ch));
+      const sp=new PIXI.Sprite(ct); sp.anchor.set(0.5); sp.scale.set(ds);
+      const ox=(i*cw+cw/2-tex.width/2)*ds, oy=(j*ch+ch/2-tex.height/2)*ds;
+      sp.x=bx+ox; sp.y=by+oy; L.fx.addChild(sp);
+      const ang=Math.atan2(oy,ox||0.001)+(Math.random()-0.5)*0.7, spd=2.5+Math.random()*4+Math.hypot(ox,oy)*0.03;
+      chunks.push({gfx:sp, vx:Math.cos(ang)*spd, vy:Math.sin(ang)*spd-1.2, vr:(Math.random()-0.5)*0.32, life:1.15});
+    }
+  }
+  flash(0.85); shake=24; ring(bx,by);
+  for(let i=0;i<6;i++) setTimeout(()=>{ burst(bx+(Math.random()-0.5)*170,by+(Math.random()-0.5)*110,20,i%2?0xffd36c:0xff7acc); shake=Math.max(shake,11); if(i===2) ring(bx,by); }, i*120);
+  if(boss){ L.boss.removeChild(boss); boss=null; } setTimeout(()=>endGame(true),1150); }
+
+/* ---- input: tilt gamma (left/right) > pointer X > keyboard ---- */
+let tiltOn=false, baseG=null, baseB=null, tiltTX=null, tiltTY=null, targetX=null, targetY=null, firing=false, fireCd=0, pointerActive=false;
+function hideHint(){ const h=document.getElementById('hint'); if(h) h.style.opacity=0; }
+function onTilt(e){ if(e.gamma==null) return; if(baseG==null) baseG=e.gamma; const sx=(S.width/2)/22;
+  tiltTX=Math.max(0,Math.min(S.width,S.width/2+(e.gamma-baseG)*sx));
+  // forward/back lean (beta) flies the kitty UP toward the action and back down
+  if(e.beta!=null){ if(baseB==null) baseB=e.beta; const sy=(KY-S.height*0.34)/20;
+    tiltTY=Math.max(S.height*0.34,Math.min(KY, KY-(baseB-e.beta)*sy)); }
+  pointerActive=true; hideHint(); }
+window.addEventListener('pointermove',e=>{ if(!tiltOn){ targetX=e.clientX; targetY=e.clientY; pointerActive=true; } if(started) hideHint(); });
+window.addEventListener('pointerdown',e=>{ firing=true; if(!tiltOn){ targetX=e.clientX; targetY=e.clientY; } if(started){ hideHint(); fireCd=0; } });
+window.addEventListener('pointerup',()=>{ firing=false; });
+const keys={};
+window.addEventListener('keydown',e=>{ keys[e.key]=true; if(e.key===' '||e.code==='Space'){ firing=true; e.preventDefault(); } });
+window.addEventListener('keyup',e=>{ keys[e.key]=false; if(e.key===' '||e.code==='Space') firing=false; });
+
+function fmtNum(n){ try{ return (n||0).toLocaleString(); }catch(e){ return ''+(n||0); } }
+function fetchStats(cb){ try{ fetch('/api/stats?t='+Date.now()).then(r=>r.json()).then(cb).catch(()=>{}); }catch(e){} }
+
+/* ---- state ---- */
+const MAXLIVES=5;
+let lives=3, score=0, blasted=0, rocks=0, breaches=0;
+let progress=0, bossPhase=false, started=false, ended=false, won=false, t=0;
+const SECTOR_FRAMES=70*60;
+let alienT=80, astT=100, pickupT=360, kyOff=0, invuln=0;
+let curWeapon='blaster', weaponT=0;
+const livesEl=document.getElementById('lives'), scoreEl=document.getElementById('scoreN');
+const wIcon=document.getElementById('wIcon'), wName=document.getElementById('wName'), wTimer=document.getElementById('wTimer');
+const barFill=document.getElementById('barFill'), barLabel=document.getElementById('barLabel');
+function hud(){ livesEl.textContent = lives>0 ? '❤️'.repeat(lives) : '💀'; scoreEl.textContent=score;
+  const w=WEAPONS[curWeapon]; wIcon.textContent=w.icon; wName.textContent=w.name; wTimer.textContent = w.temp ? '('+Math.ceil(weaponT/60)+'s)' : ''; }
+
+let wakeLock=null;
+async function keepAwake(){ try{ if('wakeLock' in navigator){ wakeLock=await navigator.wakeLock.request('screen'); if(wakeLock&&wakeLock.addEventListener) wakeLock.addEventListener('release',()=>{ wakeLock=null; }); } }catch(e){} }
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible'&&started&&!ended&&!wakeLock) keepAwake(); });
+
+/* ---- start overlay ---- */
+(function(){
+  const touch = navigator.maxTouchPoints>0 || 'ontouchstart' in window;
+  const picker=document.getElementById('picker');
+  KITTIES.forEach((k,i)=>{ const b=document.createElement('button'); b.className='kbtn'+(i===sel?' sel':'');
+    const cv=document.createElement('canvas'); cv.className='kface'; cv.width=cv.height=132; drawHead(cv,k);   // drawn fallback
+    // upgrade to the painted portrait if one exists in /assets (swaps in on load, else keeps the drawing)
+    const img=new Image(); img.className='kface kportrait'; img.alt=k.nick; img.onload=()=>{ if(cv.parentNode) cv.replaceWith(img); }; img.src='assets/'+k.id+'.jpg'+AV;
+    const nm=document.createElement('span'); nm.className='kname'; nm.innerHTML=k.nick+'<span class="kfull">'+k.full+'</span>';
+    b.appendChild(cv); b.appendChild(nm);
+    b.addEventListener('click',()=>{ sel=i; try{localStorage.setItem('nuzz:kitty',String(i));}catch(e){}
+      [...picker.children].forEach(c=>c.classList.remove('sel')); b.classList.add('sel'); });
+    picker.appendChild(b); });
+  document.getElementById('startBlurb').textContent = touch
+    ? "Tilt your phone left & right to fly. Tap to blast upward. Grab ✦ weapon power-ups and ❤️ repairs, then take down the mothership."
+    : "Move the mouse left & right (or arrows) to fly. Click or hold Space to blast upward. Grab power-ups and repairs, then beat the mothership.";
+  document.getElementById('tiltNote').textContent = touch ? "Hold the phone upright & comfy — that becomes center." : "";
+  fetchStats(s=>{ if(s && s.aliens_blasted!=null) document.getElementById('startWorld').textContent='🌍 '+fmtNum(s.aliens_blasted)+' aliens blasted by kitties worldwide — add to the count.'; });
+  function begin(){ started=true; document.getElementById('start').style.display='none'; spawnKitty(); hud(); keepAwake(); track('start',{tilt:tiltOn,kitty:KITTIES[sel].nick}); }
+  document.getElementById('startBtn').addEventListener('click',()=>{ const DOE=window.DeviceOrientationEvent;
+    if(DOE && typeof DOE.requestPermission==='function'){ DOE.requestPermission().then(res=>{ if(res==='granted'){ window.addEventListener('deviceorientation',onTilt); tiltOn=true; } begin(); }).catch(begin); }
+    else if(DOE){ window.addEventListener('deviceorientation',onTilt); tiltOn=true; begin(); }
+    else { begin(); } });
+})();
+track('open');
+
+(function(){ const LEVELS=[{href:'/aliens/',label:'👽 Defend the Herd'},{href:'/?panda',label:'🐼 Falling Pandas'},{href:'/?dog',label:'🐶 Agility Course'},{href:'/?nest',label:'🐦 Feed the Nest'}];
+  const more=document.getElementById('kittyMore'); if(more) for(const Lv of LEVELS){ const a=document.createElement('a'); a.className='morelink'; a.href=Lv.href; a.textContent=Lv.label; a.addEventListener('click',()=>track('level_link',{to:Lv.href})); more.appendChild(a); } })();
+
+function endGame(victory){ if(ended) return; ended=true; won=victory; let title,blurb;
+  if(victory){ if(lives>=3 && breaches===0){ title='🏆 Flawless sortie!'; blurb="Mothership down, barely a scratch, not one alien past the line. The planet is throwing a parade."; }
+    else if(lives>=3){ title='🎖 Mothership destroyed!'; blurb="You held the line the whole way and blew the mothership out of the sky in style. Textbook flying."; }
+    else { title='🚀 Level cleared!'; blurb="Banged up but victorious — the mothership is a cloud of glitter and the planet is safe. Good flying, Space Force."; } }
+  else { title='💥 Kitty down!'; blurb="Your jetpack's out and the mothership's still up there. The planet's counting on a rematch — give it another go."; }
+  const ek=document.getElementById('endKitty'); ek.style.display='none'; ek.onload=()=>{ ek.style.display='block'; }; ek.src='assets/'+KITTIES[sel].id+'.jpg'+AV;
+  document.getElementById('endTitle').textContent=title; document.getElementById('endBlurb').textContent=blurb;
+  document.getElementById('scLine').textContent='🌟 '+score+' pts · 👽 '+blasted+' blasted · ☄️ '+rocks+' rocks busted · 🛡 '+breaches+' slipped past';
+  document.getElementById('end').style.display='flex';
+  track('run_end',{result:victory?(lives>=3?'flawless':'win'):'lose',won:victory,score:score,blasted:blasted,rocks:rocks,breaches:breaches,lives:lives,
+    inc:{kitty_runs:1,kitty_wins:victory?1:0,aliens_blasted:blasted}});
+  setTimeout(()=>fetchStats(s=>{ if(s && s.aliens_blasted!=null) document.getElementById('endWorld').textContent='🌍 '+fmtNum(s.aliens_blasted)+' aliens blasted worldwide — and counting.'; }),700); }
+
+/* ---- asteroids (spawn top, fall down) ---- */
+const asteroids=[];
+function makeAsteroid(){ const sz=Math.random(); const R= sz<0.5?14:(sz<0.85?24:36); const hp= R<18?1:(R<30?2:3);
+  const x=sideM+R+Math.random()*(S.width-2*sideM-R*2), y=-R-20;
+  const rocks=['rock1','rock2','rock3'].filter(id=>SPRITES[id]); let g;
+  if(rocks.length){ const tex=SPRITES[rocks[(Math.random()*rocks.length)|0]]; g=new PIXI.Sprite(tex); g.anchor.set(0.5); g.scale.set((R*2.5)/Math.max(tex.width,tex.height)); }
+  else { g=new PIXI.Graphics(); const n=9, pts=[]; for(let k=0;k<n;k++){ const a=k/n*Math.PI*2, rad=R*(0.72+Math.random()*0.4); pts.push(Math.cos(a)*rad,Math.sin(a)*rad); }
+    g.beginFill(0x6b6f7a).drawPolygon(pts).endFill();
+    g.beginFill(0x53565f).drawCircle(-R*0.25,-R*0.05,R*0.2).drawCircle(R*0.2,R*0.25,R*0.14).endFill();
+    g.beginFill(0x7c818c,0.6).drawCircle(R*0.1,-R*0.3,R*0.12).endFill(); }
+  g.x=x; g.y=y; L.asteroid.addChild(g);
+  asteroids.push({gfx:g,x:x,y:y,vy:(0.9+progress*0.8+Math.random()*0.7),vr:(Math.random()-0.5)*0.07,r:R,hp:hp}); }
+
+/* ---- main loop ---- */
+const warnEl=document.getElementById('warn');
+app.ticker.add((delta)=>{
+  t+=delta;
+  starG.clear(); const scroll = started && !ended ? 1.4 : 0.5;
+  for(const s of stars){ s.y+=scroll*s.z*delta; if(s.y>S.height){ s.y-=S.height; s.x=Math.random()*S.width; }
+    starG.beginFill(0xffffff,0.25+s.z*0.45); starG.drawCircle(s.x,s.y,s.r); starG.endFill(); }
+  if(neb1){ neb1.y+=0.1*delta; if(neb1.y>S.height+60) neb1.y=-60; }
+  if(neb2){ neb2.y+=0.07*delta; if(neb2.y>S.height+60) neb2.y=-60; }
+  for(let i=parts.length-1;i>=0;i--){ const p=parts[i]; p.gfx.x+=p.vx*delta; p.gfx.y+=p.vy*delta; p.vy+=0.1*delta; p.life-=0.03*delta; p.gfx.alpha=Math.max(0,p.life); if(p.life<=0){ L.fx.removeChild(p.gfx); parts.splice(i,1); } }
+  // explosion chunks
+  for(let i=chunks.length-1;i>=0;i--){ const c=chunks[i]; c.gfx.x+=c.vx*delta; c.gfx.y+=c.vy*delta; c.vy+=0.12*delta; c.gfx.rotation+=c.vr*delta; c.life-=0.012*delta; c.gfx.alpha=Math.max(0,Math.min(1,c.life*1.4)); if(c.life<=0){ L.fx.removeChild(c.gfx); chunks.splice(i,1); } }
+  // shockwave rings
+  for(let i=rings.length-1;i>=0;i--){ const r=rings[i]; r.r+=9*delta; r.life-=0.03*delta; r.gfx.clear(); r.gfx.lineStyle(5*r.life+1,0xfff0c0,Math.max(0,r.life)); r.gfx.drawCircle(r.x,r.y,r.r); if(r.life<=0){ L.fx.removeChild(r.gfx); rings.splice(i,1); } }
+  // white flash + screen shake
+  if(flashG.alpha>0){ flashG.alpha*=Math.pow(0.86,delta); if(flashG.alpha<0.02) flashG.alpha=0; }
+  if(shake>0){ app.stage.x=(Math.random()-0.5)*shake; app.stage.y=(Math.random()-0.5)*shake; shake*=Math.pow(0.9,delta); if(shake<0.5){ shake=0; app.stage.x=0; app.stage.y=0; } }
+  if(!started || ended) return;
+
+  if(!bossPhase){ progress += delta/SECTOR_FRAMES;
+    if(progress>=1){ progress=1; bossPhase=true; spawnBoss(); warnEl.classList.add('show'); setTimeout(()=>warnEl.classList.remove('show'),1700); barLabel.textContent='MOTHERSHIP'; barFill.classList.add('boss'); }
+    barFill.style.width=(progress*100).toFixed(1)+'%';
+    alienT-=delta; if(alienT<=0 && progress<0.98){ makeAlien(false); alienT=Math.max(46,108-progress*55); }
+    astT-=delta;   if(astT<=0   && progress<0.98){ makeAsteroid();   astT=Math.max(56,140-progress*64); }
+  }
+  if(WEAPONS[curWeapon].temp){ weaponT-=delta; if(weaponT<=0){ curWeapon='blaster'; } }
+  pickupT-=delta; if(pickupT<=0){ const pool=['spread','rapid','heavy','health','spread','rapid','health']; makePickup(pool[(Math.random()*pool.length)|0]); pickupT=820+Math.random()*460; }
+
+  /* kitty movement (left/right + forward/back) */
+  let tx=(tiltOn && tiltTX!=null)?tiltTX:(targetX!=null?targetX:S.width/2);
+  if(keys['ArrowLeft']||keys['a']){ tx-=8*delta; targetX=tx; }
+  if(keys['ArrowRight']||keys['d']){ tx+=8*delta; targetX=tx; }
+  tx=Math.max(sideM,Math.min(S.width-sideM,tx));
+  let ty=(tiltOn && tiltTY!=null)?tiltTY:(targetY!=null?targetY:KY);
+  if(keys['ArrowUp']||keys['w']){ ty-=8*delta; targetY=ty; }
+  if(keys['ArrowDown']||keys['s']){ ty+=8*delta; targetY=ty; }
+  ty=Math.max(S.height*0.34,Math.min(KY,ty));
+  const prevX=kitty.x; kitty.x+=(tx-kitty.x)*Math.min(1,0.2*delta);
+  kyOff*=Math.pow(0.88,delta); if(Math.abs(kyOff)<0.4) kyOff=0;
+  kitty.y+=((ty+kyOff)-kitty.y)*Math.min(1,0.2*delta);
+  const vx=kitty.x-prevX; kitty.rotation+=(Math.max(-0.3,Math.min(0.3,vx*0.03))-kitty.rotation)*0.2;   // bank
+  const fl=kitty.flame; fl.clear();
+  if(!kitty.noFlame){ const len=10+Math.abs(vx)*1.5+Math.random()*5, fyB=kFlameY;
+    [-9,9].forEach(fx=>{ fl.beginFill(0xffd36c,0.9).drawPolygon([fx-4,fyB,fx+4,fyB,fx,fyB+len]).endFill();
+      fl.beginFill(0xff7a3c,0.85).drawPolygon([fx-2,fyB,fx+2,fyB,fx,fyB+len*0.6]).endFill(); }); }
+  if(invuln>0){ invuln-=delta; kitty.alpha=(Math.floor(t*0.5)%2)?0.35:0.95; } else kitty.alpha=1;
+  hud();
+
+  fireCd-=delta; if(firing && fireCd<=0){ WEAPONS[curWeapon].make(); fireCd=WEAPONS[curWeapon].cd; }
+
+  const kr=kittyR;
+  function hitKitty(px,py){ if(invuln>0) return; lives--; invuln=80; kyOff=24; burst(px,py,16,0xff6a6a); hud(); if(lives<=0) endGame(false); }
+
+  /* bolts (moving up) */
+  for(let i=bolts.length-1;i>=0;i--){ const b=bolts[i]; b.x+=b.vx*delta; b.y+=b.vy*delta; b.gfx.x=b.x; b.gfx.y=b.y; let gone=false;
+    if(b.y<-20||b.x<-20||b.x>S.width+20){ L.bolt.removeChild(b.gfx); bolts.splice(i,1); continue; }
+    if(boss && Math.hypot(b.x-boss.x,b.y-boss.y)<boss.r){ bossHP-=b.dmg; bossHit=1; score+=b.dmg; burst(b.x,b.y,5,0xff9ed6); L.bolt.removeChild(b.gfx); bolts.splice(i,1);
+      barFill.style.width=Math.max(0,bossHP/bossMax*100).toFixed(1)+'%'; if(bossHP<=0){ score+=200; killBoss(); } continue; }
+    for(let j=aliens.length-1;j>=0;j--){ const a=aliens[j]; if(Math.abs(b.x-a.gfx.x)<a.r+8 && Math.abs(b.y-a.y)<a.r+6){ a.hp-=b.dmg; a.hit=1; burst(b.x,b.y,4,0x8ff0ff); L.bolt.removeChild(b.gfx); bolts.splice(i,1); gone=true;
+      if(a.hp<=0){ burst(a.gfx.x,a.y,a.type==='brute'?20:12,0x8ff0ff); if(a.type==='brute'&&Math.random()<0.55) makePickup(['health','heavy','rapid','spread'][(Math.random()*4)|0],a.gfx.x,a.y); L.alien.removeChild(a.gfx); aliens.splice(j,1); blasted++; score+=a.type==='brute'?30:10; } break; } }
+    if(gone) continue;
+    for(let j=asteroids.length-1;j>=0;j--){ const r=asteroids[j]; if(Math.hypot(b.x-r.x,b.y-r.y)<r.r+5){ r.hp-=b.dmg; burst(b.x,b.y,4,0xcfd3da); L.bolt.removeChild(b.gfx); bolts.splice(i,1);
+      if(r.hp<=0){ burst(r.x,r.y,14,0x9aa0ac); L.asteroid.removeChild(r.gfx); asteroids.splice(j,1); rocks++; score+=3; } break; } }
+  }
+
+  /* pickups (falling) */
+  for(let i=pickups.length-1;i>=0;i--){ const p=pickups[i]; p.y+=1.2*delta; p.gfx.y=p.y; p.gfx.x=p.bx+Math.sin(t*0.06+p.ph)*10; p.gfx.scale.set(1+Math.sin(t*0.12+p.ph)*0.06);
+    if(Math.hypot(p.gfx.x-kitty.x,p.y-kitty.y)<kr+p.r){ L.pickup.removeChild(p.gfx); pickups.splice(i,1);
+      if(p.kind==='health'){ lives=Math.min(MAXLIVES,lives+1); burst(kitty.x,kitty.y,14,0xff6a8a); }
+      else { curWeapon=p.kind; weaponT=WEAPONS[p.kind].dur; burst(kitty.x,kitty.y,14,PICKUPS[p.kind].color); } hud(); continue; }
+    if(p.y>S.height+30){ L.pickup.removeChild(p.gfx); pickups.splice(i,1); } }
+
+  /* aliens (falling) */
+  for(let i=aliens.length-1;i>=0;i--){ const a=aliens[i]; a.y+=a.vy*delta; a.gfx.y=a.y; a.gfx.x=a.bx+Math.sin(t*0.05+a.ph)*a.amp;
+    a.hit*=0.85; a.gfx.scale.set(1+a.hit*0.12); if(a.glow) a.glow.alpha = a.hit>0.1?(0.4+Math.random()*0.6):0.85;
+    if(Math.abs(a.gfx.x-kitty.x)<kr+a.r && Math.abs(a.y-kitty.y)<kr+a.r){ hitKitty(a.gfx.x,a.y); burst(a.gfx.x,a.y,12,0xff8a7a); L.alien.removeChild(a.gfx); aliens.splice(i,1); continue; }
+    if(a.y>S.height+26){ breaches++; L.alien.removeChild(a.gfx); aliens.splice(i,1); } }
+
+  /* asteroids (falling) */
+  for(let i=asteroids.length-1;i>=0;i--){ const r=asteroids[i]; r.y+=r.vy*delta; r.gfx.y=r.y; r.gfx.rotation+=r.vr*delta;
+    if(Math.hypot(r.x-kitty.x,r.y-kitty.y)<kr+r.r-4){ hitKitty(r.x,r.y); burst(r.x,r.y,12,0xc0c4cc); if(r.r<18){ L.asteroid.removeChild(r.gfx); asteroids.splice(i,1); } continue; }
+    if(r.y>S.height+r.r+30){ L.asteroid.removeChild(r.gfx); asteroids.splice(i,1); } }
+
+  /* boss */
+  if(boss){ bossHit*=0.85; boss.scale.set(1+bossHit*0.05);
+    boss.y += (boss.ty-boss.y)*0.03*delta;
+    boss.bx += ((kitty.x)-boss.bx)*0.004*delta; boss.x=Math.max(80,Math.min(S.width-80, boss.bx+Math.sin(t*0.02)*S.width*0.18));
+    bossFireT-=delta; if(bossFireT<=0){ bossShoot(); bossFireT=Math.max(54,96-score*0.015); }
+    bossSpawnT-=delta; if(bossSpawnT<=0){ makeAlien(true); if(Math.random()<0.4) makeAlien(true); bossSpawnT=300; } }
+
+  /* boss projectiles (falling toward kitty) */
+  for(let i=bossBolts.length-1;i>=0;i--){ const b=bossBolts[i]; b.x+=b.vx*delta; b.y+=b.vy*delta; b.gfx.x=b.x; b.gfx.y=b.y;
+    if(Math.hypot(b.x-kitty.x,b.y-kitty.y)<kr+b.r){ hitKitty(b.x,b.y); L.bolt.removeChild(b.gfx); bossBolts.splice(i,1); continue; }
+    if(b.y>S.height+20||b.x<-20||b.x>S.width+20){ L.bolt.removeChild(b.gfx); bossBolts.splice(i,1); } }
+});
+})();
+</script>
+</body>
+</html>

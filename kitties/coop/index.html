@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#070b1c">
+<title>Space Force Kitties — Co-op</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
+  html,body{height:100%;overflow:hidden;background:#070b1c;font-family:'Comic Sans MS','Chalkboard SE',cursive,sans-serif;color:#fff;touch-action:none}
+  #wrap{position:fixed;inset:0}
+  canvas{display:block}
+  #hud{position:fixed;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:center;padding:11px 15px;pointer-events:none;z-index:5;font-weight:bold;text-shadow:0 2px 4px rgba(0,0,0,.6)}
+  #hud .hl{font-size:9px;letter-spacing:.12em;opacity:.7;display:block}
+  #you,#wing{font-size:17px;min-width:78px}
+  #wing{text-align:right}
+  #you b{color:#ffd36c} #wing b{color:#8fc0ff}
+  #score{font-size:15px;text-align:center}
+  #score .sc{color:#ffd95e}
+  #bar{position:fixed;top:46px;left:14px;right:14px;z-index:5;pointer-events:none}
+  #barLabel{font-size:10px;letter-spacing:.18em;opacity:.7;margin:0 0 3px 2px;font-weight:bold}
+  #barTrack{height:9px;background:rgba(255,255,255,.12);border-radius:6px;overflow:hidden}
+  #barFill{height:100%;width:0;background:linear-gradient(90deg,#5cf0c0,#8ff0ff);border-radius:6px;transition:width .12s linear}
+  #barFill.boss{background:linear-gradient(90deg,#ff6a6a,#ff9e3c)}
+  #proto{position:fixed;bottom:7px;left:0;right:0;text-align:center;font-size:11px;letter-spacing:.15em;opacity:.4;z-index:5;pointer-events:none}
+  #hint{position:fixed;left:0;right:0;bottom:30px;text-align:center;font-size:15px;font-weight:bold;opacity:.9;z-index:5;pointer-events:none;text-shadow:0 2px 4px rgba(0,0,0,.6);transition:opacity .6s}
+  #warn{position:fixed;left:0;right:0;top:40%;text-align:center;font-size:25px;font-weight:bold;color:#ff8a8a;z-index:6;pointer-events:none;opacity:0;text-shadow:0 2px 10px rgba(0,0,0,.8);transition:opacity .25s}
+  #warn.show{opacity:1}
+  #back{position:fixed;top:12px;left:14px;font-size:13px;color:#fff;opacity:.7;text-decoration:none;z-index:16}
+  #lobby{position:fixed;inset:0;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:24px;background:radial-gradient(circle at 50% 30%,#14224d,#070b1c 72%);z-index:15;overflow-y:auto}
+  #lobby h2{font-size:25px;margin-bottom:10px;text-shadow:0 3px 0 rgba(0,0,0,.4)}
+  #lobby p{max-width:330px;line-height:1.5;font-size:14.5px;margin-bottom:14px;opacity:.92}
+  .pickHead{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.65;margin-bottom:8px}
+  #picker{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;max-width:300px;margin-bottom:18px}
+  .kbtn{border:2px solid transparent;border-radius:14px;padding:4px;cursor:pointer;background:rgba(255,255,255,.05)}
+  .kbtn.sel{border-color:#ffd95e;background:rgba(255,217,94,.14)}
+  .kbtn img{width:62px;height:62px;border-radius:11px;object-fit:cover;display:block}
+  #status{font-size:15.5px;font-weight:bold;min-height:22px;margin-bottom:14px;color:#9fe8c0}
+  .dots::after{content:'';animation:dots 1.2s steps(4,end) infinite}
+  @keyframes dots{0%{content:''}25%{content:'.'}50%{content:'..'}75%{content:'...'}}
+  #lobby button{font-family:inherit;font-size:18px;font-weight:bold;color:#070b1c;background:#ffd95e;border:none;border-radius:28px;padding:14px 34px;cursor:pointer;box-shadow:0 5px 0 #c9a93f;margin:5px 0}
+  #lobby button:active{transform:translateY(3px);box-shadow:0 2px 0 #c9a93f}
+  #lobby button.ghost{background:transparent;color:#bcd2ff;box-shadow:none;border:2px solid rgba(188,210,255,.45);font-size:15px;padding:11px 26px}
+  #invite{display:none;width:100%;max-width:330px;margin:8px 0 2px}
+  #invite .lk{display:flex;gap:8px}
+  #inviteLink{flex:1;font-family:inherit;font-size:13px;padding:11px 12px;border-radius:12px;border:2px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06);color:#fff}
+  #copyBtn{font-size:14px;padding:11px 16px;margin:0}
+  #lobbyNote{margin-top:12px;font-size:12px;opacity:.5;max-width:290px;line-height:1.4}
+  #end{position:fixed;inset:0;display:none;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:30px;background:rgba(7,11,28,.9);z-index:10}
+  #end h2{font-size:25px;margin-bottom:10px;text-shadow:0 3px 0 rgba(0,0,0,.4)}
+  #end p{max-width:330px;line-height:1.5;font-size:15px;margin-bottom:18px;opacity:.92}
+  #end .row{display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
+  #end button{font-family:inherit;font-size:16px;font-weight:bold;color:#070b1c;background:#ffd95e;border:none;border-radius:24px;padding:12px 24px;cursor:pointer;box-shadow:0 5px 0 #c9a93f}
+  #end button.ghost{background:transparent;color:#fff;box-shadow:none;border:2px solid rgba(255,255,255,.3)}
+  #err{position:fixed;inset:0;display:none;justify-content:center;align-items:center;text-align:center;padding:30px;z-index:20;font-size:15px;line-height:1.6}
+</style>
+</head>
+<body>
+<div id="wrap"></div>
+<a id="back" href="/kitties/">← solo</a>
+<div id="hud">
+  <div id="you"><span class="hl">YOU</span><span id="youHp">❤❤❤</span></div>
+  <div id="score">🌟 <span class="sc" id="scoreN">0</span></div>
+  <div id="wing"><span class="hl">WINGMAN</span><span id="wingHp">❤❤❤</span></div>
+</div>
+<div id="bar"><div id="barLabel">SECTOR</div><div id="barTrack"><div id="barFill"></div></div></div>
+<div id="warn">⚠ MOTHERSHIP INBOUND</div>
+<div id="hint">Cover the sky together · grab ❤️ repairs for whoever's low!</div>
+<div id="proto">CO-OP PROTOTYPE · two kitties, one planet</div>
+
+<div id="lobby">
+  <h2>🐱🚀 Space Force Kitties — Co-op</h2>
+  <p>Defend the planet together. Each pilot has their own health — share the ❤️ repairs!</p>
+  <div class="pickHead">Pick your kitty</div>
+  <div id="picker"></div>
+  <div id="status"></div>
+  <div id="menu">
+    <button id="findBtn">🌐 Find a wingman</button><br>
+    <button id="inviteBtn" class="ghost">✉️ Invite a friend</button>
+  </div>
+  <div id="invite"><div class="lk"><input id="inviteLink" readonly><button id="copyBtn">Copy</button></div></div>
+  <div id="lobbyNote"></div>
+</div>
+
+<div id="end"><h2 id="endTitle">🚀</h2><p id="endBlurb"></p><div class="row"><button id="againBtn">Play again</button><button class="ghost" onclick="location.href='/kitties/'">Solo</button></div></div>
+<div id="err">Couldn't load the graphics engine (PixiJS CDN). Check your connection and reload.</div>
+
+<script src="https://cdn.jsdelivr.net/npm/pixi.js@7/dist/pixi.min.js"></script>
+<script>
+(function(){
+if(!window.PIXI){ document.getElementById('err').style.display='flex'; return; }
+
+const ROOMS='wss://nuzz-rooms.djhubrii.workers.dev';
+const ASSET='../assets/', AV='?v=10';
+function track(ev,props){ try{ var b=JSON.stringify(Object.assign({ev:ev,level:'kitties-coop',t:Date.now()},props||{}));
+  if(navigator.sendBeacon) navigator.sendBeacon('/api/e',new Blob([b],{type:'application/json'})); }catch(e){} }
+
+const app=new PIXI.Application({ resizeTo:window, backgroundColor:0x070b1c, antialias:true, resolution:Math.min(window.devicePixelRatio||1,2), autoDensity:true });
+document.getElementById('wrap').appendChild(app.view);
+const S=app.screen;
+const L={}; ['bg','planet','glow','asteroid','pickup','alien','boss','bolt','kitty','fx','none'].forEach(k=>{ L[k]=new PIXI.Container(); app.stage.addChild(L[k]); });
+
+function glowTexture(sz){ const c=document.createElement('canvas'); c.width=c.height=sz; const cx=c.getContext('2d');
+  const g=cx.createRadialGradient(sz/2,sz/2,0,sz/2,sz/2,sz/2); g.addColorStop(0,'rgba(255,255,255,.95)'); g.addColorStop(.45,'rgba(255,255,255,.3)'); g.addColorStop(1,'rgba(255,255,255,0)');
+  cx.fillStyle=g; cx.fillRect(0,0,sz,sz); return PIXI.Texture.from(c); }
+const TEX_GLOW=glowTexture(256);
+const SPRITES={};
+function loadSprite(id){ if(id in SPRITES) return; SPRITES[id]=null; PIXI.Texture.fromURL(ASSET+'sprites/'+id+'.png'+AV).then(t=>{SPRITES[id]=t;}).catch(()=>{}); }
+['cheeto','boss','rock1','rock2','rock3','alien'].forEach(loadSprite);
+
+/* roster — selection colors your kitty's aura; sprite art is shared for now */
+const KITTIES=[{id:'cheeto',nick:'Cheeto',rim:0xff9a3c},{id:'major-tom',nick:'Major Tom',rim:0x5ec8ff},{id:'tabby',nick:'Tabby',rim:0xffc94a},{id:'moonpie',nick:'Moonpie',rim:0xff7ad0}];
+let sel=0; try{ const s=parseInt(localStorage.getItem('nuzz:kitty')); if(s>=0&&s<4) sel=s; }catch(e){}
+
+let KY, topMargin=66, sideM=30;
+function layout(){ KY=S.height*0.82; }
+layout();
+const starG=new PIXI.Graphics(); L.bg.addChild(starG); let stars=[];
+function buildStars(){ stars=[]; for(let i=0;i<110;i++) stars.push({x:Math.random()*S.width,y:Math.random()*S.height,z:0.35+Math.random()*1.1,r:Math.random()*1.3+0.4}); }
+buildStars();
+const planet=new PIXI.Graphics(), planetGlow=new PIXI.Sprite(TEX_GLOW);
+planetGlow.anchor.set(0.5); planetGlow.tint=0x6fa0ff; planetGlow.alpha=0.5; planetGlow.blendMode=PIXI.BLEND_MODES.ADD; L.glow.addChild(planetGlow); L.planet.addChild(planet);
+function buildPlanet(){ const R=Math.max(S.width*0.9,300), cx=S.width*0.5, cy=S.height*0.97+R; planet.clear();
+  planet.beginFill(0x244a86).drawCircle(cx,cy,R).endFill(); planet.beginFill(0x2f5fa6).drawCircle(cx,cy,R*0.99).endFill();
+  planet.beginFill(0x9fc4ff,0.45).drawEllipse(cx,cy-R*0.97,R*0.5,R*0.04).endFill(); planetGlow.x=cx; planetGlow.y=cy-R; planetGlow.scale.set((R*1.8)/256); }
+buildPlanet();
+let bgSprite=null;
+function fitBg(){ if(!bgSprite) return; const t=bgSprite.texture, sc=Math.max(S.width/t.width,S.height/t.height); bgSprite.scale.set(sc); bgSprite.x=S.width/2; bgSprite.y=S.height/2; }
+PIXI.Texture.fromURL(ASSET+'bg.jpg'+AV).then(tex=>{ bgSprite=new PIXI.Sprite(tex); bgSprite.anchor.set(0.5); bgSprite.alpha=0.62; L.bg.addChildAt(bgSprite,0); fitBg(); }).catch(()=>{});
+window.addEventListener('resize',()=>{ layout(); buildStars(); buildPlanet(); fitBg(); });
+
+/* shared art builders */
+function makeKitty(rim){ const C=new PIXI.Container();
+  const ring=new PIXI.Sprite(TEX_GLOW); ring.anchor.set(0.5); ring.tint=rim; ring.alpha=0.45; ring.scale.set(0.62); ring.y=-6; ring.blendMode=PIXI.BLEND_MODES.ADD; C.addChild(ring); C.ring=ring;
+  if(SPRITES.cheeto){ const s=new PIXI.Sprite(SPRITES.cheeto); s.anchor.set(0.5,0.46); s.scale.set(84/SPRITES.cheeto.height); C.addChild(s); }
+  else { const g=new PIXI.Graphics(); g.beginFill(0xf2952f).drawCircle(0,-8,14).endFill(); C.addChild(g); }
+  return C; }
+function makeAlienDisp(type){ const c=new PIXI.Container(); const fast=type===1, brute=type===2;
+  const glow=new PIXI.Sprite(TEX_GLOW); glow.anchor.set(0.5); glow.scale.set(brute?0.62:0.46); glow.tint=brute?0x9aa0ac:(fast?0xff6a6a:0x9c6cff); glow.blendMode=PIXI.BLEND_MODES.ADD; c.addChild(glow);
+  if(SPRITES.alien){ const sp=new PIXI.Sprite(SPRITES.alien); sp.anchor.set(0.5); sp.rotation=Math.PI; const R0=brute?56:(fast?34:44); sp.scale.set(R0/Math.max(SPRITES.alien.width,SPRITES.alien.height)); sp.tint=brute?0xc6ced8:(fast?0xff9a9a:0xffffff); c.addChild(sp); }
+  else { const g=new PIXI.Graphics(); g.beginFill(fast?0xff8a7a:(brute?0x9aa0ac:0x9fb6c8)).drawEllipse(0,0,brute?26:20,brute?12:9).endFill(); c.addChild(g); }
+  return c; }
+function makeRockDisp(R,ri){ const id='rock'+ri;
+  if(SPRITES[id]){ const s=new PIXI.Sprite(SPRITES[id]); s.anchor.set(0.5); s.scale.set((R*2.5)/Math.max(SPRITES[id].width,SPRITES[id].height)); return s; }
+  const g=new PIXI.Graphics(); const n=9,pts=[]; for(let k=0;k<n;k++){ const a=k/n*Math.PI*2,rad=R*(0.72+Math.random()*0.4); pts.push(Math.cos(a)*rad,Math.sin(a)*rad); }
+  g.beginFill(0x6b6f7a).drawPolygon(pts).endFill(); return g; }
+function makePickupDisp(){ const c=new PIXI.Container();
+  const glow=new PIXI.Sprite(TEX_GLOW); glow.anchor.set(0.5); glow.tint=0xff6a8a; glow.alpha=0.8; glow.scale.set(0.42); glow.blendMode=PIXI.BLEND_MODES.ADD; c.addChild(glow);
+  const d=new PIXI.Graphics(); d.beginFill(0x0c1330,0.85).drawCircle(0,0,15).endFill(); d.lineStyle(2,0xff6a8a,0.9).drawCircle(0,0,15); c.addChild(d);
+  const txt=new PIXI.Text('❤️',{fontFamily:'sans-serif',fontSize:17,fill:0xffffff}); txt.anchor.set(0.5); c.addChild(txt); return c; }
+function makeBossDisp(){ const c=new PIXI.Container();
+  const glow=new PIXI.Sprite(TEX_GLOW); glow.anchor.set(0.5); glow.tint=0xff7acc; glow.alpha=0.6; glow.blendMode=PIXI.BLEND_MODES.ADD; c.addChild(glow);
+  if(SPRITES.boss){ const s=new PIXI.Sprite(SPRITES.boss); s.anchor.set(0.5); const tw=Math.min(220,S.width*0.56); s.scale.set(tw/SPRITES.boss.width); c.addChild(s); glow.scale.set(tw/200); c.bw=tw; c.tex=SPRITES.boss; c.ds=tw/SPRITES.boss.width; }
+  else { const g=new PIXI.Graphics(); g.beginFill(0x8a6ab0).drawEllipse(0,0,72,27).endFill(); c.addChild(g); glow.scale.set(0.95); c.bw=144; c.tex=null; c.ds=0; }
+  return c; }
+
+const parts=[],chunks=[],rings=[]; let shake=0;
+const flashG=new PIXI.Graphics(); flashG.alpha=0; L.none.addChild(flashG);
+function flash(a){ flashG.clear(); flashG.beginFill(0xffffff).drawRect(0,0,S.width,S.height).endFill(); flashG.alpha=a; }
+function ring(x,y){ const g=new PIXI.Graphics(); g.blendMode=PIXI.BLEND_MODES.ADD; L.fx.addChild(g); rings.push({gfx:g,x:x,y:y,r:8,life:1}); }
+function burst(x,y,n,color){ for(let i=0;i<n;i++){ const p=new PIXI.Graphics(); p.beginFill(color).drawCircle(0,0,2+Math.random()*3).endFill(); p.x=x; p.y=y; p.blendMode=PIXI.BLEND_MODES.ADD;
+  L.fx.addChild(p); const a=Math.random()*Math.PI*2,s=2+Math.random()*4.5; parts.push({gfx:p,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:1}); } }
+
+/* ================= NETWORKING ================= */
+let role=null, ws=null, started=false, ended=false, t=0, botGame=false, partnerSel=null;
+const lobby=document.getElementById('lobby'), statusEl=document.getElementById('status'), menu=document.getElementById('menu'), inviteBox=document.getElementById('invite');
+function setStatus(txt,spin){ statusEl.innerHTML=txt+(spin?'<span class="dots"></span>':''); }
+const touch=navigator.maxTouchPoints>0||'ontouchstart' in window;
+document.getElementById('lobbyNote').textContent = touch ? "Tilt to fly (lean forward to push up). Tap to blast." : "Mouse to fly, click/Space to blast.";
+
+/* kitty picker */
+(function(){ const pk=document.getElementById('picker'); KITTIES.forEach((k,i)=>{ const b=document.createElement('div'); b.className='kbtn'+(i===sel?' sel':'');
+  const img=new Image(); img.src=ASSET+k.id+'.jpg'+AV; img.alt=k.nick; b.appendChild(img);
+  b.addEventListener('click',()=>{ sel=i; try{localStorage.setItem('nuzz:kitty',String(i));}catch(e){} [...pk.children].forEach(c=>c.classList.remove('sel')); b.classList.add('sel'); }); pk.appendChild(b); }); })();
+
+let wakeLock=null;
+async function keepAwake(){ try{ if('wakeLock' in navigator){ wakeLock=await navigator.wakeLock.request('screen'); if(wakeLock&&wakeLock.addEventListener) wakeLock.addEventListener('release',()=>{wakeLock=null;}); } }catch(e){} }
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible'&&started&&!ended&&!wakeLock) keepAwake(); });
+function withMotion(cb){ const DOE=window.DeviceOrientationEvent;
+  if(DOE&&typeof DOE.requestPermission==='function'){ DOE.requestPermission().then(r=>{ if(r==='granted'){ window.addEventListener('deviceorientation',onTilt); tiltOn=true; } cb(); }).catch(cb); }
+  else if(DOE){ window.addEventListener('deviceorientation',onTilt); tiltOn=true; cb(); } else cb(); }
+
+let matchTimer=null;
+function enterWaiting(){ menu.style.display='none'; }
+document.getElementById('findBtn').addEventListener('click',()=>withMotion(findPartner));
+document.getElementById('inviteBtn').addEventListener('click',()=>withMotion(inviteFriend));
+document.getElementById('copyBtn').addEventListener('click',()=>{ const i=document.getElementById('inviteLink');
+  try{ navigator.clipboard.writeText(i.value); document.getElementById('copyBtn').textContent='Copied!'; }catch(e){ i.select(); } });
+
+// auto-fill the waiting room with a bot wingman if no human shows up
+function armBot(ms){ clearTimeout(matchTimer); matchTimer=setTimeout(()=>{ if(role&&started) return; if(role==='guest'&&ws) return; // a guest keeps waiting for the host
+    setStatus('Bringing in a bot wingman 🤖'); try{ if(ws) ws.close(); }catch(e){} startBotGame(); }, ms); }
+
+function findPartner(){ enterWaiting(); setStatus('Looking for a wingman',true); track('find');
+  let lw; try{ lw=new WebSocket(ROOMS+'/find'); }catch(e){ startBotGame(); return; }
+  lw.onmessage=ev=>{ let m; try{ m=JSON.parse(ev.data); }catch(e){ return; } if(m.type==='matched'){ clearTimeout(matchTimer); role=m.role; lw.close(); joinRoom(m.roomId); } };
+  lw.onerror=()=>{ if(!role&&!started) startBotGame(); };
+  armBot(7000);
+}
+function inviteFriend(){ enterWaiting(); role='host'; const id=crypto.randomUUID().replace(/-/g,'').slice(0,12);
+  inviteBox.style.display='block'; document.getElementById('inviteLink').value=location.origin+'/kitties/coop/?room='+id;
+  setStatus('Share the link & wait for your friend',true); track('invite'); joinRoom(id); armBot(22000); }
+
+function joinRoom(id){ ws=new WebSocket(ROOMS+'/room/'+id); ws.onmessage=onRoomMsg;
+  ws.onerror=()=>{ if(!started) startBotGame(); }; ws.onclose=()=>{ if(started&&!ended) partnerGone('The connection dropped.'); }; }
+function sendNet(o){ if(ws&&ws.readyState===1){ try{ ws.send(JSON.stringify(o)); }catch(e){} } }
+function onRoomMsg(ev){ let m; try{ m=JSON.parse(ev.data); }catch(e){ return; }
+  switch(m.type){
+    case 'ready': beginMatch(); break;
+    case 'hi': partnerSel=m.k; if(partnerK.disp) partnerK.disp.ring.tint=KITTIES[m.k%4].rim; break;
+    case 'partner_left': if(started&&!ended) partnerGone('Your wingman left.'); break;
+    case 'i': guestIn.x=m.x; guestIn.y=m.y; guestIn.f=m.f; break;
+    case 's': applySnapshot(m); break;
+    case 'end': showEnd(m.title,m.blurb); break;
+    case 'full': setStatus('That room is full — bringing in a bot 🤖'); startBotGame(); break;
+  }
+}
+const rm=location.search.match(/[?&]room=([a-z0-9]{4,32})/i);
+if(rm){ enterWaiting(); role='guest'; setStatus('Joining your friend',true); withMotion(()=>{ joinRoom(rm[1]); armBot(15000); }); }
+
+function beginMatch(){ if(started) return; clearTimeout(matchTimer); lobby.style.display='none'; started=true; keepAwake(); track('start',{role:role,bot:botGame?1:0});
+  selfK.y=KY; partnerK.y=KY; guestIn.x=S.width/2; guestIn.y=KY;                   // <-- start on the floor, not at y=0
+  selfK.disp=makeKitty(KITTIES[sel].rim); selfK.disp.x=S.width/2; selfK.disp.y=KY; L.kitty.addChild(selfK.disp);
+  const prim = partnerSel!=null?KITTIES[partnerSel%4].rim:0x8fc0ff;
+  partnerK.disp=makeKitty(prim); partnerK.disp.x=S.width/2; partnerK.disp.y=KY; L.kitty.addChild(partnerK.disp);
+  if(!botGame) sendNet({type:'hi',k:sel});
+  hudCoop(); if(role==='host') setStatus(''); else setStatus('');
+}
+function startBotGame(){ if(started||ended) return; clearTimeout(matchTimer); role='host'; botGame=true; partnerSel=(sel+1)%4; setTimeout(beginMatch,400); }
+function partnerGone(reason){ if(ended) return; showEnd('👋 Wingman left', reason+' Jump back in to find another.'); }
+
+/* ================= INPUT ================= */
+let tiltOn=false, baseG=null, baseB=null, aimX=S.width/2, aimY=null, firing=false, pointerActive=false;
+function onTilt(e){ if(e.gamma==null) return; if(baseG==null) baseG=e.gamma; const sx=(S.width/2)/22;
+  aimX=Math.max(sideM,Math.min(S.width-sideM,S.width/2+(e.gamma-baseG)*sx));
+  if(e.beta!=null){ if(baseB==null) baseB=e.beta; const sy=(KY-S.height*0.34)/20; aimY=Math.max(S.height*0.34,Math.min(KY,KY-(baseB-e.beta)*sy)); }
+  pointerActive=true; }
+window.addEventListener('pointermove',e=>{ if(!tiltOn){ aimX=e.clientX; aimY=e.clientY; pointerActive=true; } });
+window.addEventListener('pointerdown',e=>{ firing=true; if(!tiltOn){ aimX=e.clientX; aimY=e.clientY; } const h=document.getElementById('hint'); if(h)h.style.opacity=0; });
+window.addEventListener('pointerup',()=>{ firing=false; });
+const keys={};
+window.addEventListener('keydown',e=>{ keys[e.key]=true; if(e.key===' '){ firing=true; e.preventDefault(); } });
+window.addEventListener('keyup',e=>{ keys[e.key]=false; if(e.key===' ') firing=false; });
+function clampAim(){ if(aimY==null) aimY=KY;
+  if(keys['ArrowLeft']||keys['a']) aimX-=7; if(keys['ArrowRight']||keys['d']) aimX+=7;
+  if(keys['ArrowUp']||keys['w']) aimY-=7; if(keys['ArrowDown']||keys['s']) aimY+=7;
+  aimX=Math.max(sideM,Math.min(S.width-sideM,aimX)); aimY=Math.max(S.height*0.34,Math.min(KY,aimY)); }
+
+/* ================= STATE ================= */
+const MAXHP=3; let score=0, progress=0, bossPhase=false;
+const SECTOR_FRAMES=70*60; let alienT=80, astT=100, pickupT=520; let nextId=1;
+const selfK={x:S.width/2,y:0,fireCd:0,invuln:0,hp:MAXHP,down:false,disp:null};
+const partnerK={x:S.width/2,y:0,fireCd:0,invuln:0,hp:MAXHP,down:false,disp:null};
+const guestIn={x:S.width/2,y:0,f:0};
+const FIRE_CD=15, BOLT_SPD=9;
+const aliens=[], asteroids=[], pickups=[], bolts=[], bossBolts=[];
+let boss=null, bossHP=0, bossMax=110, bossFireT=120, bossSpawnT=320, bossHit=0, bossTex=null, bossDS=0;
+const barFill=document.getElementById('barFill'), barLabel=document.getElementById('barLabel'),
+      youHpEl=document.getElementById('youHp'), wingHpEl=document.getElementById('wingHp'), scoreEl=document.getElementById('scoreN');
+function hp2s(hp,down){ return down?'💀':'❤'.repeat(Math.max(0,hp)); }
+// host renders its own state; guest passes (you,wing) from the snapshot
+function hudCoop(youHp,youDown,wingHp,wingDown){
+  if(youHp===undefined){ youHp=selfK.hp; youDown=selfK.down; wingHp=partnerK.hp; wingDown=partnerK.down; }
+  youHpEl.textContent=hp2s(youHp,youDown); wingHpEl.textContent=hp2s(wingHp,wingDown); scoreEl.textContent=score; }
+
+function spawnBolt(x,y){ const g=new PIXI.Graphics(); g.blendMode=PIXI.BLEND_MODES.ADD; g.beginFill(0x8ff0ff).drawEllipse(0,0,3,9).endFill(); g.beginFill(0xffffff).drawEllipse(0,0,1.6,5).endFill();
+  g.x=x; g.y=y; L.bolt.addChild(g); bolts.push({gfx:g,x:x,y:y}); }
+function hostMakeAlien(fromBoss){ const r=Math.random(); let type; if(progress>0.3&&r<0.16+progress*0.22) type=2; else if(r<0.32+progress*0.28) type=1; else type=0;
+  const disp=makeAlienDisp(type); const x=fromBoss&&boss?boss.x:sideM+Math.random()*(S.width-2*sideM); const y=fromBoss&&boss?boss.y:-30; disp.x=x; disp.y=y; L.alien.addChild(disp);
+  const base=type===2?0.6:(type===1?1.7:1.0); aliens.push({id:nextId++,gfx:disp,bx:x,y:y,ph:Math.random()*6,amp:type===2?9:(type===1?18:34),vy:base+progress*0.9+Math.random()*0.5,r:type===2?26:(type===1?17:22),hp:type===2?4:1,t:type}); }
+function hostMakeAsteroid(){ const sz=Math.random(); const R=sz<0.5?14:(sz<0.85?24:36), hp=R<18?1:(R<30?2:3), ri=1+((Math.random()*3)|0);
+  const disp=makeRockDisp(R,ri); const x=sideM+R+Math.random()*(S.width-2*sideM-R*2); disp.x=x; disp.y=-R-20; L.asteroid.addChild(disp);
+  asteroids.push({id:nextId++,gfx:disp,x:x,y:-R-20,vy:0.9+progress*0.8+Math.random()*0.7,vr:(Math.random()-0.5)*0.07,r:R,hp:hp,ri:ri}); }
+function hostMakePickup(){ const disp=makePickupDisp(); const x=sideM+20+Math.random()*(S.width-2*sideM-40); disp.x=x; disp.y=-26; L.pickup.addChild(disp);
+  pickups.push({id:nextId++,gfx:disp,x:x,y:-26,ph:Math.random()*6}); }
+function hostSpawnBoss(){ const c=makeBossDisp(); c.x=S.width/2; c.y=-90; L.boss.addChild(c); boss=c; boss.bx=S.width/2; boss.ty=topMargin+S.height*0.15; boss.r=c.bw*0.42; bossHP=bossMax; bossTex=c.tex; bossDS=c.ds;
+  document.getElementById('warn').classList.add('show'); setTimeout(()=>document.getElementById('warn').classList.remove('show'),1700); barLabel.textContent='MOTHERSHIP'; barFill.classList.add('boss'); }
+function hostBossShoot(){ const mx=boss.x,my=boss.y+24, alive=[selfK,partnerK].filter(k=>!k.down), tgt=alive[(Math.random()*alive.length)|0]||selfK; const dx=tgt.x-mx,dy=tgt.y-my,d=Math.hypot(dx,dy)||1,sp=4;
+  const g=new PIXI.Graphics(); g.blendMode=PIXI.BLEND_MODES.ADD; g.beginFill(0xff5ea0).drawCircle(0,0,6).endFill(); g.beginFill(0xffffff).drawCircle(0,0,2.6).endFill();
+  g.x=mx; g.y=my; L.bolt.addChild(g); bossBolts.push({gfx:g,x:mx,y:my,vx:dx/d*sp,vy:dy/d*sp}); }
+function hostKillBoss(){ const bx=boss?boss.x:S.width/2, by=boss?boss.y:S.height*0.2; score+=300;
+  if(boss&&bossTex){ const tex=bossTex,ds=bossDS,cols=5,rows=4,cw=tex.width/cols,ch=tex.height/rows;
+    for(let i=0;i<cols;i++) for(let j=0;j<rows;j++){ const ct=new PIXI.Texture(tex.baseTexture,new PIXI.Rectangle(i*cw,j*ch,cw,ch)); const sp=new PIXI.Sprite(ct); sp.anchor.set(0.5); sp.scale.set(ds);
+      const ox=(i*cw+cw/2-tex.width/2)*ds, oy=(j*ch+ch/2-tex.height/2)*ds; sp.x=bx+ox; sp.y=by+oy; L.fx.addChild(sp);
+      const ang=Math.atan2(oy,ox||0.001)+(Math.random()-0.5)*0.7, spd=2.5+Math.random()*4+Math.hypot(ox,oy)*0.03; chunks.push({gfx:sp,vx:Math.cos(ang)*spd,vy:Math.sin(ang)*spd-1.2,vr:(Math.random()-0.5)*0.32,life:1.15}); } }
+  flash(0.85); shake=24; ring(bx,by); for(let i=0;i<6;i++) setTimeout(()=>{ burst(bx+(Math.random()-0.5)*170,by+(Math.random()-0.5)*110,20,i%2?0xffd36c:0xff7acc); shake=Math.max(shake,11); },i*120);
+  if(boss){ L.boss.removeChild(boss); boss=null; } setTimeout(()=>hostEnd(true),1150); }
+
+/* calm bot wingman: slides along the floor toward the lowest threat & fires */
+let botRepick=0, botTX=S.width*0.5;
+function botUpdate(delta){ botRepick-=delta;
+  if(botRepick<=0){ botRepick=42+Math.random()*34;
+    let best=null,by=-1; for(const a of aliens) if(a.gfx.y>by){ by=a.gfx.y; best=a.gfx; } for(const r of asteroids) if(r.gfx.y>by){ by=r.gfx.y; best=r.gfx; }
+    botTX = best ? best.x : S.width*(0.4+Math.random()*0.3); }
+  guestIn.x += (botTX-guestIn.x)*Math.min(1,0.045*delta);   // slow hand — no instant darting
+  guestIn.x = Math.max(sideM,Math.min(S.width-sideM,guestIn.x));
+  guestIn.y += ((KY-24)-guestIn.y)*Math.min(1,0.05*delta);  // hovers near the floor, never races to the top
+  guestIn.f = 1; }
+
+function driveKitty(K,tx,ty,fire,delta){ if(K.down){ if(K.disp) K.disp.alpha=0.3; return; }
+  K.x+=(tx-K.x)*Math.min(1,0.2*delta); K.y+=(ty-K.y)*Math.min(1,0.2*delta);
+  if(K.invuln>0) K.invuln-=delta;
+  K.fireCd-=delta; if(fire&&K.fireCd<=0){ spawnBolt(K.x,K.y-42); K.fireCd=FIRE_CD; }
+  if(K.disp){ K.disp.x=K.x; K.disp.y=K.y; K.disp.alpha=(K.invuln>0&&Math.floor(t*0.5)%2)?0.4:1; } }
+function hitKitty(K,px,py){ if(K.invuln>0||K.down) return; K.hp--; K.invuln=80; burst(px,py,16,0xff6a6a); hudCoop();
+  if(K.hp<=0){ K.down=true; burst(px,py,22,0xff4444); if(selfK.down&&partnerK.down) hostEnd(false); } }
+function reviveCheck(){}
+
+function hostEnd(victory){ if(ended) return; ended=true; let title,blurb;
+  if(victory){ title=(selfK.hp+partnerK.hp>=5)?'🏆 Flawless duo!':'🎖 Mothership down!'; blurb="Two kitties, one very safe planet. The aliens are writing a strongly-worded letter."; }
+  else { title='💥 Both kitties down!'; blurb="The mothership broke through. Regroup and run it back — wingmen don't quit."; }
+  blurb+='  (🌟 '+score+')';
+  track('run_end',{role:'host',bot:botGame?1:0,won:victory,score:score,inc:{kitty_runs:1,kitty_wins:victory?1:0}});
+  sendNet({type:'end',title:title,blurb:blurb}); showEnd(title,blurb); }
+
+/* ================= GUEST render ================= */
+const gAliens={}, gRocks={}, gPicks={}; let gBoss=null; const gBoltsG=new PIXI.Graphics(); L.bolt.addChild(gBoltsG);
+function applySnapshot(m){ if(!started) return;
+  score=m.sc; hudCoop(m.h2,m.d2===1,m.h1,m.d1===1);   // guest: YOU = guest hp (h2), WING = host hp (h1)
+  if(m.ph){ barLabel.textContent='MOTHERSHIP'; barFill.classList.add('boss'); barFill.style.width=(m.bo?m.bo[2]:0)+'%'; } else barFill.style.width=m.pr+'%';
+  if(partnerK.disp){ partnerK.disp.x=m.me[0]; partnerK.disp.y=m.me[1]; partnerK.disp.alpha=m.d1===1?0.3:1; }
+  if(selfK.disp) selfK.disp.alpha=m.d2===1?0.3:1;
+  const seen={}; (m.a||[]).forEach(a=>{ const id=a[0]; seen[id]=1; let w=gAliens[id]; if(!w){ w=gAliens[id]=makeAlienDisp(a[3]); L.alien.addChild(w); } w.x=a[1]; w.y=a[2]; });
+  for(const id in gAliens){ if(!seen[id]){ L.alien.removeChild(gAliens[id]); delete gAliens[id]; } }
+  const seenR={}; (m.r||[]).forEach(o=>{ const id=o[0]; seenR[id]=1; let w=gRocks[id]; if(!w){ w=gRocks[id]=makeRockDisp(o[3],o[4]); L.asteroid.addChild(w); } w.x=o[1]; w.y=o[2]; w.rotation+=0.02; });
+  for(const id in gRocks){ if(!seenR[id]){ L.asteroid.removeChild(gRocks[id]); delete gRocks[id]; } }
+  const seenP={}; (m.p||[]).forEach(o=>{ const id=o[0]; seenP[id]=1; let w=gPicks[id]; if(!w){ w=gPicks[id]=makePickupDisp(); L.pickup.addChild(w); } w.x=o[1]; w.y=o[2]; });
+  for(const id in gPicks){ if(!seenP[id]){ L.pickup.removeChild(gPicks[id]); delete gPicks[id]; } }
+  gBoltsG.clear(); (m.b||[]).forEach(b=>{ gBoltsG.beginFill(0x8ff0ff,0.9).drawEllipse(b[0],b[1],3,9).endFill(); }); (m.bb||[]).forEach(b=>{ gBoltsG.beginFill(0xff5ea0,0.95).drawCircle(b[0],b[1],6).endFill(); });
+  if(m.bo){ if(!gBoss){ gBoss=makeBossDisp(); L.boss.addChild(gBoss); } gBoss.x=m.bo[0]; gBoss.y=m.bo[1]; } else if(gBoss){ burst(gBoss.x,gBoss.y,24,0xff7acc); L.boss.removeChild(gBoss); gBoss=null; }
+}
+
+/* ================= LOOP ================= */
+let netT=0;
+app.ticker.add(delta=>{ t+=delta;
+  starG.clear(); const scr=started&&!ended?1.4:0.5; for(const s of stars){ s.y+=scr*s.z*delta; if(s.y>S.height){ s.y-=S.height; s.x=Math.random()*S.width; } starG.beginFill(0xffffff,0.25+s.z*0.45); starG.drawCircle(s.x,s.y,s.r); starG.endFill(); }
+  for(let i=parts.length-1;i>=0;i--){ const p=parts[i]; p.gfx.x+=p.vx*delta; p.gfx.y+=p.vy*delta; p.vy+=0.1*delta; p.life-=0.03*delta; p.gfx.alpha=Math.max(0,p.life); if(p.life<=0){ L.fx.removeChild(p.gfx); parts.splice(i,1); } }
+  for(let i=chunks.length-1;i>=0;i--){ const c=chunks[i]; c.gfx.x+=c.vx*delta; c.gfx.y+=c.vy*delta; c.vy+=0.12*delta; c.gfx.rotation+=c.vr*delta; c.life-=0.012*delta; c.gfx.alpha=Math.max(0,Math.min(1,c.life*1.4)); if(c.life<=0){ L.fx.removeChild(c.gfx); chunks.splice(i,1); } }
+  for(let i=rings.length-1;i>=0;i--){ const r=rings[i]; r.r+=9*delta; r.life-=0.03*delta; r.gfx.clear(); r.gfx.lineStyle(5*r.life+1,0xfff0c0,Math.max(0,r.life)); r.gfx.drawCircle(r.x,r.y,r.r); if(r.life<=0){ L.fx.removeChild(r.gfx); rings.splice(i,1); } }
+  if(flashG.alpha>0){ flashG.alpha*=Math.pow(0.86,delta); if(flashG.alpha<0.02) flashG.alpha=0; }
+  if(shake>0){ app.stage.x=(Math.random()-0.5)*shake; app.stage.y=(Math.random()-0.5)*shake; shake*=Math.pow(0.9,delta); if(shake<0.5){ shake=0; app.stage.x=0; app.stage.y=0; } }
+  if(!started||ended) return;
+  clampAim();
+
+  if(role==='guest'){ if(selfK.disp){ selfK.disp.x+=(aimX-selfK.disp.x)*Math.min(1,0.3*delta); selfK.disp.y+=(aimY-selfK.disp.y)*Math.min(1,0.3*delta); }
+    netT+=delta; if(netT>=3){ netT=0; sendNet({type:'i',x:Math.round(aimX),y:Math.round(aimY),f:firing?1:0}); } return; }
+
+  /* HOST */
+  if(!bossPhase){ progress+=delta/SECTOR_FRAMES; if(progress>=1){ progress=1; bossPhase=true; hostSpawnBoss(); }
+    barFill.style.width=(progress*100).toFixed(1)+'%';
+    alienT-=delta; if(alienT<=0&&progress<0.98){ hostMakeAlien(false); alienT=Math.max(40,100-progress*55); }
+    astT-=delta; if(astT<=0&&progress<0.98){ hostMakeAsteroid(); astT=Math.max(52,130-progress*60); }
+    pickupT-=delta; if(pickupT<=0){ hostMakePickup(); pickupT=600+Math.random()*360; } }
+  if(botGame) botUpdate(delta);
+  driveKitty(selfK,aimX,aimY,firing,delta);
+  driveKitty(partnerK,guestIn.x,guestIn.y,guestIn.f,delta);
+  hudCoop();
+
+  for(let i=bolts.length-1;i>=0;i--){ const b=bolts[i]; b.y-=BOLT_SPD*delta; b.gfx.y=b.y; let gone=false;
+    if(b.y<-20){ L.bolt.removeChild(b.gfx); bolts.splice(i,1); continue; }
+    if(boss&&Math.hypot(b.x-boss.x,b.y-boss.y)<boss.r){ bossHP--; bossHit=1; score+=1; burst(b.x,b.y,4,0xff9ed6); L.bolt.removeChild(b.gfx); bolts.splice(i,1); barFill.style.width=Math.max(0,bossHP/bossMax*100)+'%'; if(bossHP<=0) hostKillBoss(); continue; }
+    for(let j=aliens.length-1;j>=0;j--){ const a=aliens[j]; if(Math.abs(b.x-a.gfx.x)<a.r+6&&Math.abs(b.y-a.y)<a.r+6){ a.hp--; burst(b.x,b.y,4,0x8ff0ff); L.bolt.removeChild(b.gfx); bolts.splice(i,1); gone=true; if(a.hp<=0){ burst(a.gfx.x,a.y,12,0x8ff0ff); L.alien.removeChild(a.gfx); aliens.splice(j,1); score+=a.t===2?30:10; } break; } }
+    if(gone) continue;
+    for(let j=asteroids.length-1;j>=0;j--){ const r=asteroids[j]; if(Math.hypot(b.x-r.x,b.y-r.y)<r.r+4){ r.hp--; burst(b.x,b.y,4,0xcfd3da); L.bolt.removeChild(b.gfx); bolts.splice(i,1); if(r.hp<=0){ burst(r.x,r.y,12,0x9aa0ac); L.asteroid.removeChild(r.gfx); asteroids.splice(j,1); score+=3; } break; } }
+  }
+  for(let i=pickups.length-1;i>=0;i--){ const p=pickups[i]; p.y+=1.1*delta; p.gfx.y=p.y; p.gfx.x=p.x+Math.sin(t*0.06+p.ph)*8; let taken=false;
+    for(const K of [selfK,partnerK]){ if(K.down) continue; if(Math.hypot(p.gfx.x-K.x,p.y-K.y)<40){ K.hp=Math.min(MAXHP,K.hp+1); burst(K.x,K.y,14,0xff6a8a); hudCoop(); L.pickup.removeChild(p.gfx); pickups.splice(i,1); taken=true; break; } }
+    if(taken) continue; if(p.y>S.height+30){ L.pickup.removeChild(p.gfx); pickups.splice(i,1); } }
+  for(let i=aliens.length-1;i>=0;i--){ const a=aliens[i]; a.y+=a.vy*delta; a.gfx.y=a.y; a.gfx.x=a.bx+Math.sin(t*0.05+a.ph)*a.amp; let dead=false;
+    for(const K of [selfK,partnerK]){ if(K.down) continue; if(Math.abs(a.gfx.x-K.x)<a.r+24&&Math.abs(a.y-K.y)<a.r+24){ hitKitty(K,a.gfx.x,a.y); burst(a.gfx.x,a.y,12,0xff8a7a); L.alien.removeChild(a.gfx); aliens.splice(i,1); dead=true; break; } }
+    if(dead) continue; if(a.y>S.height+26){ L.alien.removeChild(a.gfx); aliens.splice(i,1); } }
+  for(let i=asteroids.length-1;i>=0;i--){ const r=asteroids[i]; r.y+=r.vy*delta; r.gfx.y=r.y; r.gfx.rotation+=r.vr*delta; let dead=false;
+    for(const K of [selfK,partnerK]){ if(K.down) continue; if(Math.hypot(r.x-K.x,r.y-K.y)<r.r+24){ hitKitty(K,r.x,r.y); burst(r.x,r.y,12,0xc0c4cc); if(r.r<18){ L.asteroid.removeChild(r.gfx); asteroids.splice(i,1); dead=true; } break; } }
+    if(dead) continue; if(r.y>S.height+r.r+30){ L.asteroid.removeChild(r.gfx); asteroids.splice(i,1); } }
+  if(boss){ bossHit*=0.85; boss.scale.set(1+bossHit*0.05); boss.y+=(boss.ty-boss.y)*0.03*delta; const aim=(selfK.y<partnerK.y?selfK:partnerK);
+    boss.bx+=((aim.x)-boss.bx)*0.004*delta; boss.x=Math.max(80,Math.min(S.width-80,boss.bx+Math.sin(t*0.02)*S.width*0.18));
+    bossFireT-=delta; if(bossFireT<=0){ hostBossShoot(); bossFireT=Math.max(50,92-score*0.01); }
+    bossSpawnT-=delta; if(bossSpawnT<=0){ hostMakeAlien(true); if(Math.random()<0.4) hostMakeAlien(true); bossSpawnT=300; } }
+  for(let i=bossBolts.length-1;i>=0;i--){ const b=bossBolts[i]; b.x+=b.vx*delta; b.y+=b.vy*delta; b.gfx.x=b.x; b.gfx.y=b.y; let dead=false;
+    for(const K of [selfK,partnerK]){ if(K.down) continue; if(Math.hypot(b.x-K.x,b.y-K.y)<28){ hitKitty(K,b.x,b.y); L.bolt.removeChild(b.gfx); bossBolts.splice(i,1); dead=true; break; } }
+    if(dead) continue; if(b.y>S.height+20||b.x<-20||b.x>S.width+20){ L.bolt.removeChild(b.gfx); bossBolts.splice(i,1); } }
+
+  netT+=delta; if(ws&&netT>=4.5){ netT=0; sendNet({ type:'s', sc:score, pr:Math.round(progress*100), ph:bossPhase?1:0,
+    h1:selfK.hp, d1:selfK.down?1:0, h2:partnerK.hp, d2:partnerK.down?1:0,
+    me:[Math.round(selfK.x),Math.round(selfK.y)],
+    a:aliens.map(a=>[a.id,Math.round(a.gfx.x),Math.round(a.y),a.t]),
+    r:asteroids.map(o=>[o.id,Math.round(o.x),Math.round(o.y),o.r,o.ri]),
+    p:pickups.map(o=>[o.id,Math.round(o.gfx.x),Math.round(o.y)]),
+    b:bolts.map(b=>[Math.round(b.x),Math.round(b.y)]),
+    bb:bossBolts.map(b=>[Math.round(b.x),Math.round(b.y)]),
+    bo: boss?[Math.round(boss.x),Math.round(boss.y),Math.round(Math.max(0,bossHP/bossMax*100))]:0 }); }
+});
+
+function showEnd(title,blurb){ ended=true; document.getElementById('endTitle').textContent=title; document.getElementById('endBlurb').textContent=blurb; document.getElementById('end').style.display='flex'; try{ if(ws) ws.close(); }catch(e){} }
+document.getElementById('againBtn').addEventListener('click',()=>location.reload());
+})();
+</script>
+</body>
+</html>

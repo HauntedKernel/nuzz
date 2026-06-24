@@ -16,3 +16,6 @@ node_modules/
 # OS / editor cruft
 .DS_Store
 Thumbs.db
+
+# Space Force Kitties raw art (140MB) — shipped art is in kitties/assets/
+kitties/refs/
