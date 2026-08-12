@@ -58,7 +58,9 @@ The repo root is the source of truth; `public/` is what actually deploys. To pus
 
 1. Edit `index.html` (and/or `manifest.json`, `sw.js`, `icons/`) in the repo root.
 2. **Syntax-check** the game script first (extract the `<script>` and `node --check`).
-3. Sync into `public/`: copy `index.html`, `manifest.json`, `sw.js`, and `icons/*`.
+3. Sync into `public/`: copy `index.html`, `manifest.json`, `sw.js`, `_redirects`, and the
+   content dirs `icons/`, `aliens/`, `kitties/`, `knights/`, `gist/`. (NOT `ideas/`, `rooms/`,
+   or `tools/` — those are notes / a separate Worker / dev scripts.)
 4. Deploy:
    ```
    npx wrangler pages deploy --project-name good-boy --commit-dirty=true --branch=main
@@ -73,6 +75,23 @@ the deploy's `<hash>.good-boy-4mx.pages.dev` permalink to see changes immediatel
 in `sw.js` only when you want to force-purge everything.
 
 To regenerate the PWA icons (placeholder heart mark; swap in real art anytime): `node tools/make-icons.js`.
+
+---
+
+## GIST (/gist/) — separate app riding on this deployment
+
+**`nuzz.pet/gist/`** hosts GIST, a live Spanish conversation-assist web app. It is NOT part of
+the game — its source lives in a separate repo/folder (`C:\Users\djhub\Gist`, see its README
+and GIST_build_plan.md). What lives here:
+- `gist/` (repo root) — the **built** client (Vite output, built with `--base=/gist/`).
+  To update: in the Gist project run `npx vite build --base=/gist/` (in `client/`), then copy
+  `client/dist/*` over `gist/` here and re-sync `public/`.
+- `functions/api/gist.js` — the Pages Function the app calls. Dependency-free (raw fetch to
+  the Anthropic API, structured outputs). The canonical system prompt is
+  `Gist/server/prompts/gist-system.md` — if you edit one, sync the other.
+- Secrets: `ANTHROPIC_API_KEY` is a Pages secret on project `good-boy`
+  (`npx wrangler pages secret put ANTHROPIC_API_KEY --project-name good-boy`).
+  Optional `GIST_MODEL` env var (default `claude-haiku-4-5`).
 
 ---
 

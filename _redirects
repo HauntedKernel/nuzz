@@ -23,3 +23,8 @@
 /Knight/    /knights/   301
 /Knights*   /knights/   301
 /KNIGHTS*   /knights/   301
+# GIST (live Spanish conversation assist) lives at /gist/ - catch autocapitalized variants.
+/Gist      /gist/     301
+/Gist/     /gist/     301
+/GIST      /gist/     301
+/GIST/     /gist/     301
