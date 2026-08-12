@@ -19,3 +19,6 @@ Thumbs.db
 
 # Space Force Kitties raw art (140MB) — shipped art is in kitties/assets/
 kitties/refs/
+
+# Local wrangler dev secrets
+.dev.vars

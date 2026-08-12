@@ -150,7 +150,9 @@ export async function onRequestPost({ request, env }) {
     if (!res.ok && res.status >= 500) res = await callOnce(); // one retry
     if (!res.ok) {
       console.log("gist upstream error", res.status, await res.text());
-      return json({ error: "gist generation failed" }, 502);
+      // 500, not 502: Cloudflare masks 502/504 responses on custom domains
+      // with its own error page, hiding the JSON body from the client.
+      return json({ error: "gist generation failed", upstream: res.status }, 500);
     }
     const data = await res.json();
     if (data.stop_reason === "refusal") {
@@ -168,6 +170,6 @@ export async function onRequestPost({ request, env }) {
     return json(gist);
   } catch (err) {
     console.log("gist error", String(err));
-    return json({ error: "gist generation failed" }, 502);
+    return json({ error: "gist generation failed" }, 500);
   }
 }
