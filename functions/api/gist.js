@@ -11,29 +11,33 @@
 //   ANTHROPIC_API_KEY  (secret, required)
 //   GIST_MODEL         (optional, default claude-haiku-4-5)
 
-const SYSTEM_PROMPT = `You are the gist engine for GIST, a live conversation-assist app. The user is an English-native speaker with intermediate (B1–B2) Spanish, in the middle of a live, real-world conversation conducted in Spanish. They often work in professional real-estate contexts (financing, remodeling, contracts, neighborhoods), but you must infer the actual domain from the transcript — do not assume real estate if the transcript says otherwise.
+const SYSTEM_PROMPT = `You are the gist engine for GIST, a live conversation-assist app. The user is an English-native speaker with intermediate (B1–B2) Spanish, in the middle of a live, real-world conversation conducted mostly in Spanish. They often work in professional real-estate contexts (financing, remodeling, contracts, neighborhoods), but you must infer the actual domain from the transcript — do not assume real estate if the transcript says otherwise.
 
 You receive a rolling transcript window (roughly the last 90 seconds of speech, machine-transcribed so expect transcription errors), plus lists of vocabulary and phrases already shown to the user this session.
 
 The speakers may switch back and forth between Spanish and English (code-switching) — the transcript can contain both languages. Treat the English portions as context for understanding the conversation. Your output stays focused on the Spanish side: vocab the user needs to follow the Spanish being spoken, and Spanish phrases the user could say next — including natural Spanish versions of things just discussed in English, when the user might want to say them in Spanish.
 
+You are called every few seconds. SPEED MATTERS MORE THAN COMPLETENESS: keep every field tight so the response generates fast — the user is mid-conversation and stale help is no help.
+
 Your job, each call:
 
-1. **topic** — a short label for what the conversation is about right now, in both English and Spanish (e.g. "Financing" / "Financiamiento"). Keep each under ~4 words.
-2. **confidence** — low/medium/high: how confident you are in the topic given the transcript quality and length.
-3. **vocab** (6–10 items) — Spanish terms an intermediate learner likely needs for THIS conversation. Prefer words actually present in the transcript, plus closely adjacent domain vocabulary. For each: the Spanish term, a concise English gloss, part of speech, and a note when genuinely useful (regionalism — flag Mexican/regional usage; false friend; or, for verbs heard in a conjugated form, show the heard form AND the infinitive, e.g. "heard 'remodelaron' — from remodelar"). Set note to null when there is nothing worth saying.
-4. **phrases** (4–6 items) — natural, ready-to-say Spanish phrases the USER could plausibly say next in this conversation — questions to ask, responses to give. They must be things the user (not the other parties) would say, register-appropriate (note usted vs. tú when it matters), and short enough to say from a glance. Include an English gloss and a simple English pronunciation respelling (e.g. "¿Cuál es la tasa de interés?" → "KWAL es la TAH-sah deh een-teh-RES").
-5. **heard_terms** (2–4 items) — words actually spoken in this window that an intermediate learner likely doesn't know, with a short English meaning. These must appear in the transcript.
+1. **summary** — one or two SHORT English sentences telling the user what is being said RIGHT NOW: the point being made, who wants what, any specifics (numbers, dates, prices, names, commitments). Weight the most recent ~20–30 seconds most heavily — this is a live whispered-interpreter update, not a recap of the whole window. If the latest speech changed direction, the summary follows it.
+2. **topic** — a short label for the current subject, in both English and Spanish (e.g. "Financing" / "Financiamiento"). Keep each under ~4 words.
+3. **confidence** — low/medium/high: how confident you are in the topic/summary given transcript quality and length.
+4. **vocab** (3–6 items, ONLY new ones) — Spanish terms an intermediate learner needs for THIS moment of the conversation. Prefer words actually present in the recent transcript. For each: the Spanish term, a concise English gloss, part of speech, and a note only when genuinely useful (regionalism — flag Mexican/regional usage; false friend; or for verbs heard conjugated, the heard form AND the infinitive, e.g. "heard 'remodelaron' — from remodelar"). Set note to null otherwise.
+5. **phrases** (2–4 items, ONLY new ones) — natural, ready-to-say Spanish phrases the USER could say next — questions to ask, responses to give. Things the user (not the other parties) would say, register-appropriate (note usted vs. tú when it matters), short enough to say from a glance. Include an English gloss and a simple English pronunciation respelling (e.g. "KWAL es la TAH-sah deh een-teh-RES").
+6. **heard_terms** (1–3 items) — words actually just spoken that an intermediate learner likely doesn't know, with a short English meaning. Must appear in the transcript.
 
 Rules:
-- NEVER repeat anything in the already-shown vocab or phrase lists. If a category would be all repeats, return fewer items rather than repeating.
+- NEVER repeat anything in the already-shown vocab or phrase lists. If a category would be all repeats, return fewer items — even zero — rather than repeating.
 - Everything must be useful at a glance mid-conversation: concise glosses, no lecture-style explanations.
 - The transcript is noisy. If a word looks like a mis-transcription of a plausible Spanish word, work with the plausible word.
-- If the transcript window is too thin to judge the topic, keep the previous topic feel generic (e.g. "General conversation" / "Conversación general") and set confidence to low.`;
+- If the window is too thin to judge, use a generic topic (e.g. "General conversation" / "Conversación general"), keep the summary honest ("Still catching the thread of the conversation."), and set confidence to low.`;
 
 const GIST_SCHEMA = {
   type: "object",
   properties: {
+    summary: { type: "string" },
     topic: {
       type: "object",
       properties: { en: { type: "string" }, es: { type: "string" } },
@@ -78,7 +82,7 @@ const GIST_SCHEMA = {
       },
     },
   },
-  required: ["topic", "confidence", "vocab", "phrases", "heard_terms"],
+  required: ["summary", "topic", "confidence", "vocab", "phrases", "heard_terms"],
   additionalProperties: false,
 };
 
@@ -124,11 +128,13 @@ export async function onRequestPost({ request, env }) {
           vocabSeen.join(", ") || "(none)"
         }\nPhrases: ${phrasesSeen.join(" | ") || "(none)"}`
       : "";
-  const userMessage = `Rolling transcript window (Spanish, machine-transcribed):\n"""\n${transcript}\n"""${seen}`;
+  const userMessage = `Rolling transcript window (machine-transcribed, oldest first — the END is the most recent speech):\n"""\n${transcript}\n"""${seen}`;
 
   const apiRequest = {
     model: env.GIST_MODEL || "claude-haiku-4-5",
-    max_tokens: 2048,
+    // Tight cap: this call runs every ~9s mid-conversation — response speed
+    // beats completeness, and the prompt asks for small item counts.
+    max_tokens: 1024,
     system: [
       { type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } },
     ],
@@ -158,16 +164,16 @@ export async function onRequestPost({ request, env }) {
     }
     const data = await res.json();
     if (data.stop_reason === "refusal") {
-      return json({ error: "gist generation refused" }, 502);
+      return json({ error: "gist generation refused" }, 500);
     }
     const text = (data.content || []).find((b) => b.type === "text")?.text;
-    if (!text) return json({ error: "empty gist response" }, 502);
+    if (!text) return json({ error: "empty gist response" }, 500);
     // Structured outputs guarantee the shape; parse defensively anyway.
     let gist;
     try {
       gist = JSON.parse(text);
     } catch {
-      return json({ error: "unparseable gist response" }, 502);
+      return json({ error: "unparseable gist response" }, 500);
     }
     return json(gist);
   } catch (err) {
