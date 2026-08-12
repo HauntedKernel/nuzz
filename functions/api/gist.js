@@ -86,6 +86,19 @@ const GIST_SCHEMA = {
   additionalProperties: false,
 };
 
+// Rapid context-only lane: just enough to keep the "Right now" card live.
+// Tiny output = fast generation (~60 tokens vs ~400 for the full gist).
+const SUMMARY_SCHEMA = {
+  type: "object",
+  properties: {
+    summary: GIST_SCHEMA.properties.summary,
+    topic: GIST_SCHEMA.properties.topic,
+    confidence: GIST_SCHEMA.properties.confidence,
+  },
+  required: ["summary", "topic", "confidence"],
+  additionalProperties: false,
+};
+
 const json = (obj, status = 200) =>
   new Response(JSON.stringify(obj), {
     status,
@@ -117,29 +130,38 @@ export async function onRequestPost({ request, env }) {
   if (!transcript) return json({ error: "transcript required" }, 400);
   if (transcript.length > 8000) return json({ error: "transcript too long" }, 400);
 
+  const summaryMode = body.mode === "summary";
+
   const asStringList = (v) =>
     Array.isArray(v) ? v.filter((x) => typeof x === "string").slice(0, 300) : [];
   const vocabSeen = asStringList(body.vocabSeen);
   const phrasesSeen = asStringList(body.phrasesSeen);
 
+  const transcriptBlock = `Rolling transcript window (machine-transcribed, oldest first — the END is the most recent speech):\n"""\n${transcript}\n"""`;
   const seen =
     vocabSeen.length || phrasesSeen.length
       ? `\n\nAlready shown this session (do NOT repeat):\nVocab: ${
           vocabSeen.join(", ") || "(none)"
         }\nPhrases: ${phrasesSeen.join(" | ") || "(none)"}`
       : "";
-  const userMessage = `Rolling transcript window (machine-transcribed, oldest first — the END is the most recent speech):\n"""\n${transcript}\n"""${seen}`;
+  const userMessage = summaryMode
+    ? `RAPID CONTEXT CALL — return only summary/topic/confidence, as fast as possible.\n\n${transcriptBlock}`
+    : `${transcriptBlock}${seen}`;
 
   const apiRequest = {
     model: env.GIST_MODEL || "claude-haiku-4-5",
-    // Tight cap: this call runs every ~9s mid-conversation — response speed
-    // beats completeness, and the prompt asks for small item counts.
-    max_tokens: 1024,
+    // Tight caps — these calls run every few seconds mid-conversation.
+    max_tokens: summaryMode ? 300 : 1024,
     system: [
       { type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } },
     ],
     messages: [{ role: "user", content: userMessage }],
-    output_config: { format: { type: "json_schema", schema: GIST_SCHEMA } },
+    output_config: {
+      format: {
+        type: "json_schema",
+        schema: summaryMode ? SUMMARY_SCHEMA : GIST_SCHEMA,
+      },
+    },
   };
 
   const callOnce = () =>
